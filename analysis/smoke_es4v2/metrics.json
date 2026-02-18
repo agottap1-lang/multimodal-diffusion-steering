@@ -1,0 +1,38 @@
+{
+  "total_rollouts": 50,
+  "picked_left": 1,
+  "picked_right": 1,
+  "failure": 48,
+  "rate_left": 0.02,
+  "rate_right": 0.02,
+  "rate_failure": 0.96,
+  "mean_entropy": -5.77129318927007e-13,
+  "collapse_seeds": 2,
+  "per_seed": {
+    "100": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 10
+    },
+    "101": {
+      "picked_left": 1,
+      "picked_right": 0,
+      "failure": 9
+    },
+    "102": {
+      "picked_left": 0,
+      "picked_right": 1,
+      "failure": 9
+    },
+    "103": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 10
+    },
+    "104": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 10
+    }
+  }
+}

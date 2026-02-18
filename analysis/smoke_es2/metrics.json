@@ -1,0 +1,28 @@
+{
+  "total_rollouts": 15,
+  "picked_left": 3,
+  "picked_right": 0,
+  "failure": 12,
+  "rate_left": 0.2,
+  "rate_right": 0.0,
+  "rate_failure": 0.8,
+  "mean_entropy": -9.618821982116783e-13,
+  "collapse_seeds": 2,
+  "per_seed": {
+    "100": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 5
+    },
+    "101": {
+      "picked_left": 1,
+      "picked_right": 0,
+      "failure": 4
+    },
+    "102": {
+      "picked_left": 2,
+      "picked_right": 0,
+      "failure": 3
+    }
+  }
+}

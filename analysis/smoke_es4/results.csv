@@ -1,0 +1,16 @@
+env_seed,sample_seed,outcome,steps,reward
+100,5000,picked_left,17,1.0
+100,5137,picked_left,22,1.0
+100,5274,failure,200,0.0
+100,5411,failure,200,0.0
+100,5548,failure,200,0.0
+101,5000,failure,200,0.0
+101,5137,failure,200,0.0
+101,5274,failure,200,0.0
+101,5411,failure,200,0.0
+101,5548,failure,200,0.0
+102,5000,failure,200,0.0
+102,5137,failure,200,0.0
+102,5274,failure,200,0.0
+102,5411,failure,200,0.0
+102,5548,failure,200,0.0

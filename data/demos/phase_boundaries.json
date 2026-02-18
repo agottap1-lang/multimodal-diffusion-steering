@@ -1,0 +1,11 @@
+{
+  "description": "Phase boundaries for each demo extracted from trajectory analysis. Used for priority weighting during training.",
+  "phases": {
+    "arc": "Smooth curved approach (0-~40 steps)",
+    "descent": "Final descent to block (handled in arc due to continuous motion)",
+    "grip": "Gripper close + lift + hold",
+    "lift": "Cube lifted entire episode"
+  },
+  "strategy": "Weight early chunks (arc phase, first 20% of trajectory) higher to prioritize learning approach direction",
+  "demos": {}
+}

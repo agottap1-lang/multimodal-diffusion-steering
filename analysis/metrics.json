@@ -1,0 +1,63 @@
+{
+  "total_rollouts": 100,
+  "picked_left": 10,
+  "picked_right": 3,
+  "failure": 87,
+  "rate_left": 0.1,
+  "rate_right": 0.03,
+  "rate_failure": 0.87,
+  "mean_entropy": 0.28365916680945513,
+  "collapse_seeds": 4,
+  "per_seed": {
+    "100": {
+      "picked_left": 1,
+      "picked_right": 1,
+      "failure": 8
+    },
+    "101": {
+      "picked_left": 2,
+      "picked_right": 1,
+      "failure": 7
+    },
+    "102": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 10
+    },
+    "103": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 10
+    },
+    "104": {
+      "picked_left": 1,
+      "picked_right": 0,
+      "failure": 9
+    },
+    "105": {
+      "picked_left": 1,
+      "picked_right": 0,
+      "failure": 9
+    },
+    "106": {
+      "picked_left": 2,
+      "picked_right": 1,
+      "failure": 7
+    },
+    "107": {
+      "picked_left": 1,
+      "picked_right": 0,
+      "failure": 9
+    },
+    "108": {
+      "picked_left": 2,
+      "picked_right": 0,
+      "failure": 8
+    },
+    "109": {
+      "picked_left": 0,
+      "picked_right": 0,
+      "failure": 10
+    }
+  }
+}

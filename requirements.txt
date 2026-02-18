@@ -1,0 +1,8 @@
+numpy>=1.21
+pybullet>=3.2
+torch>=1.12
+pyyaml>=6.0
+imageio>=2.9
+imageio-ffmpeg>=0.4
+matplotlib>=3.5
+tqdm>=4.62

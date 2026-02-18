@@ -1,0 +1,43 @@
+# ── TwoBlockPick Diffusion Policy Training Config ──
+
+# Observation / Action
+obs_dim: 22          # ee_pos(3)+ee_quat(4)+grip(1)+Lpos(3)+Lquat(4)+Rpos(3)+Rquat(4)
+act_dim: 5           # dx, dy, dz, dyaw, grip
+
+# Horizons
+horizon: 32          # total action-chunk length predicted by denoiser (CRITICAL: must match training, demos use H=32)
+n_action_steps: 8    # actions executed per re-plan (REVERTED to 8 - H=48/n=16 caused 0% success)
+
+# Diffusion
+n_diffusion_steps: 100
+beta_start: 0.0001
+beta_end: 0.1          # must give alpha_bar_T ≈ 0 with 100 steps (was 0.02 → ᾱ=0.36!)
+
+# Model
+hidden_dim: 256
+n_blocks: 6
+time_embed_dim: 128
+
+# Training
+batch_size: 256
+lr: 1.0e-4
+weight_decay: 1.0e-6
+epochs: 500          # sufficient for convergence
+grad_clip: 1.0
+seed: 42
+ema_decay: 0.999
+mirror_augment: true
+smooth_weight: 0.01  # REVERTED to 0.01 - baseline config achieved 14% success
+
+# Evaluation
+eval_epochs: [100, 200, 300, 400, 500]  # will auto-add final epoch
+eval_max_steps: 400
+eval_execute_steps: 8  # REVERTED to 8 to match n_action_steps during training
+eval_sampling_method: "ddim"  # deterministic for reproducibility; eta=0.3+ for multimodality testing
+eval_ddim_eta: 0.3  # stochastic DDIM for multimodality (0.0=deterministic, 1.0=~DDPM)
+eval_ddim_steps: null  # null = use all n_diffusion_steps; set to 20-50 for strided DDIM schedule
+eval_temporal_ensemble: true  # average overlapping action chunks (smoother but may over-smooth)
+
+# Paths
+demo_path: data/demos/demos.npz
+ckpt_dir: runs
