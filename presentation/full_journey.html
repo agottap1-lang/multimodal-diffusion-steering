@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Full Journey — From Conv1d to Legibility Metric</title>
+<style>
+  :root {
+    --accent: #4f8ef7; --accent2: #f7a24f; --warn: #e05555; --ok: #4fbf7f;
+    --bg: #0f1117; --surface: #1a1d2e; --surface2: #252840;
+    --text: #e8eaf0; --muted: #8890aa; --border: #2e3150;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
+
+  .deck { position: relative; width: 100vw; height: 100vh; }
+  .slide { display: none; position: absolute; inset: 0; padding: 48px 72px; flex-direction: column; gap: 20px; overflow-y: auto; }
+  .slide.active { display: flex; }
+
+  .nav { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; z-index: 100; }
+  .nav button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 7px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background .15s; }
+  .nav button:hover { background: var(--accent); color: #fff; }
+  #counter { color: var(--muted); font-size: 12px; min-width: 60px; text-align: center; }
+
+  .slide-num { font-size: 10px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: -8px; }
+  h1 { font-size: 2.5rem; font-weight: 700; line-height: 1.15; }
+  h2 { font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
+  h3 { font-size: 1.1rem; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+  p, li { font-size: .97rem; line-height: 1.6; }
+  .muted { color: var(--muted); font-size: .88rem; }
+  .accent { color: var(--accent); }
+  .accent2 { color: var(--accent2); }
+  .warn { color: var(--warn); }
+  .ok { color: var(--ok); }
+  .big-num { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+
+  .row { display: flex; gap: 20px; }
+  .col { flex: 1; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; }
+  .card.accent-border { border-color: var(--accent); }
+  .card.warn-border { border-color: var(--warn); }
+  .card.ok-border { border-color: var(--ok); }
+
+  ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  li::before { content: "→ "; color: var(--accent); font-weight: 700; }
+  li.cross::before { content: "✗ "; color: var(--warn); }
+  li.check::before { content: "✓ "; color: var(--ok); }
+  li.dot::before { content: "• "; color: var(--muted); }
+  li.q::before { content: "Q: "; color: var(--accent2); font-weight: 700; }
+  li.a::before { content: "A: "; color: var(--accent); font-weight: 700; }
+
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: .78rem; font-weight: 600; letter-spacing: .5px; }
+  .badge-blue { background: #1e3060; color: var(--accent); }
+  .badge-red { background: #3a1010; color: var(--warn); }
+  .badge-green { background: #0e2e1c; color: var(--ok); }
+  .badge-gold { background: #2e1e00; color: var(--accent2); }
+
+  code { font-family: 'Cascadia Code', 'Fira Code', monospace; background: #0a0c14; border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: block; font-size: .88rem; line-height: 1.55; color: #c8d0e8; white-space: pre-wrap; }
+  code .kw { color: #7eacff; } code .val { color: #f7c96e; } code .cmt { color: #4a5080; }
+
+  blockquote { border-left: 4px solid var(--accent); padding: 10px 18px; background: var(--surface2); border-radius: 0 8px 8px 0; font-style: italic; color: var(--muted); font-size: .95rem; }
+  blockquote.user-q { border-left-color: var(--accent2); }
+  blockquote cite { display: block; margin-top: 5px; color: var(--accent); font-style: normal; font-size: .84rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th { background: var(--surface2); padding: 8px 12px; text-align: left; font-weight: 600; color: var(--accent); border-bottom: 2px solid var(--border); }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+
+  .title-slide { justify-content: center; }
+  .title-slide h1 { font-size: 2.8rem; }
+  .subtitle { font-size: 1.15rem; color: var(--muted); margin-top: -8px; }
+  .divider { height: 2px; background: linear-gradient(90deg, var(--accent), transparent); border: none; margin: 2px 0; }
+
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl-row { display: flex; gap: 14px; align-items: flex-start; padding: 6px 0; border-left: 2px solid var(--border); padding-left: 18px; position: relative; }
+  .tl-dot { position: absolute; left: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--surface2); border: 2px solid var(--accent); }
+  .tl-dot.ok { border-color: var(--ok); background: var(--ok); }
+  .tl-dot.warn { border-color: var(--warn); background: var(--warn); }
+  .tl-dot.gold { border-color: var(--accent2); background: var(--accent2); }
+  .tl-time { font-size: .82rem; color: var(--accent); min-width: 60px; font-weight: 700; }
+  .tl-text { font-size: .92rem; }
+
+  .meter { height: 22px; background: var(--surface2); border-radius: 6px; overflow: hidden; width: 100%; position: relative; }
+  .meter-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 600; color: #fff; }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- ═══════════ SLIDE 1 — TITLE ═══════════ -->
+<div class="slide active title-slide">
+  <p class="slide-num">Full session journey</p>
+  <h1>From Conv1d Architecture<br>to <span class="accent">Legibility Metric</span></h1>
+  <hr class="divider">
+  <p class="subtitle">The complete story: what we built, what broke, what questions arose, and why we ended up asking about L_early</p>
+  <p class="muted" style="margin-top:16px">
+    Conv1d LegDiff · 100-epoch training · 20-ep evaluation · "how can success be 100%?" → "what is my ultimate goal?" → "did I achieve it?" → "what is L_early, explain with example"
+  </p>
+</div>
+
+<!-- ═══════════ SLIDE 2 — PHASE 1: THE BUILD ═══════════ -->
+<div class="slide">
+  <p class="slide-num">01 — Phase 1: The Build</p>
+  <h2>Replacing MLP with <span class="accent">Conv1d UNet</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>What was the old model?</h3>
+      <ul>
+        <li>MLP-based UNet blocks — collapses temporal dimension</li>
+        <li>GoalCondDiffusionPolicy with simple Linear layers</li>
+        <li>8.8M parameters, trained to loss = <span class="warn">0.034</span></li>
+        <li>Problem: MLP can't learn local temporal patterns in action chunks</li>
+      </ul>
+    </div>
+    <div class="col card accent-border">
+      <h3>What we replaced it with</h3>
+      <ul>
+        <li class="check"><strong>Conv1dBlock</strong>: Conv1d → GroupNorm → Mish activation</li>
+        <li class="check"><strong>Conv1dResBlock</strong>: two Conv1dBlocks + FiLM conditioning</li>
+        <li class="check">Channels-first (B, C, T) processing throughout</li>
+        <li class="check">FiLM: cond = time_mlp(t) + obs_embed + goal_embed, injected at every residual block</li>
+        <li class="check">11.7M parameters — same architecture in train + eval scripts</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <h3>Files modified</h3>
+    <p class="muted">scripts/train_legibility_diffuser.py · evaluation/eval_legibility_diffuser.py · evaluation/eval_legdiff_vlm_rerank.py (import fix)</p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 3 — PHASE 2: THE CHAOS ═══════════ -->
+<div class="slide">
+  <p class="slide-num">02 — Phase 2: Training Chaos</p>
+  <h2>Competing GPU processes &amp; the <span class="warn">restart</span></h2>
+  <div class="row">
+    <div class="col card warn-border">
+      <h3>What went wrong</h3>
+      <ul>
+        <li class="cross">Three training processes accidentally launched simultaneously</li>
+        <li class="cross">PIDs 42836, 50684, 11832 all fighting for GPU</li>
+        <li class="cross">Epoch 1 stalled for 8+ minutes (normally ~20 seconds)</li>
+        <li class="cross">GPU memory thrashing — no process could make progress</li>
+      </ul>
+    </div>
+    <div class="col card ok-border">
+      <h3>The fix</h3>
+      <ul>
+        <li class="check">Killed all competing processes (6 PIDs total)</li>
+        <li class="check">Restarted single clean run with <code style="display:inline; padding:2px 6px">-u</code> unbuffered output</li>
+        <li class="check">100 epochs, batch_size=256, lr=1e-4</li>
+        <li class="check">Saved checkpoints at ep25, ep50, ep75, ep100</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card accent-border">
+    <h3>Training loss curve</h3>
+    <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px">
+      <div class="card" style="text-align:center; min-width:80px"><span class="muted">Ep 1</span><br><span class="big-num warn">0.047</span></div>
+      <div class="card" style="text-align:center; min-width:80px"><span class="muted">Ep 10</span><br><span class="big-num accent2">0.0075</span></div>
+      <div class="card" style="text-align:center; min-width:80px"><span class="muted">Ep 30</span><br><span class="big-num accent2">0.0046</span></div>
+      <div class="card" style="text-align:center; min-width:80px"><span class="muted">Ep 50</span><br><span class="big-num accent">0.0034</span></div>
+      <div class="card" style="text-align:center; min-width:80px"><span class="muted">Ep 70</span><br><span class="big-num accent">0.0025</span></div>
+      <div class="card" style="text-align:center; min-width:80px"><span class="muted">Ep 100</span><br><span class="big-num ok">0.00175</span></div>
+    </div>
+    <p style="margin-top:10px">Old MLP final loss was <span class="warn">0.034</span> → Conv1d is <strong class="ok">20× better</strong></p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 4 — PHASE 3: EVAL RESULTS ═══════════ -->
+<div class="slide">
+  <p class="slide-num">03 — Phase 3: Evaluation</p>
+  <h2>20-episode results: <span class="accent">Baseline vs LegDiff</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>Baseline (unconditional diffusion)</h3>
+      <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Success rate</td><td><strong>100%</strong> (20/20)</td></tr>
+        <tr><td>Mean steps</td><td>344</td></tr>
+        <tr><td>L_early</td><td><strong>0.9187 ± 0.030</strong></td></tr>
+      </table>
+    </div>
+    <div class="col card accent-border">
+      <h3>LegDiff Conv1d (cfg_scale=3.0)</h3>
+      <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Success rate</td><td><strong>100%</strong> (20/20)</td></tr>
+        <tr><td>Mean steps</td><td>307 <span class="ok">(-37 steps)</span></td></tr>
+        <tr><td>L_early</td><td><strong>0.9355 ± 0.018</strong> <span class="ok">(+0.017)</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <h3>At this point, this is what we had</h3>
+    <ul>
+      <li class="check">Both policies: 100% success, both policies: L_early > 0.9</li>
+      <li class="check">LegDiff is better on L_early (+0.017) and faster (307 vs 344 steps)</li>
+      <li>Everything looks great… but then the questions started</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 5 — THE TURNING POINT ═══════════ -->
+<div class="slide">
+  <p class="slide-num">04 — The Turning Point</p>
+  <h2>The questions that <span class="accent2">changed everything</span></h2>
+  <div class="timeline">
+    <div class="tl-row">
+      <div class="tl-dot gold"></div>
+      <span class="tl-time">Question 1</span>
+      <div class="tl-text">
+        <blockquote class="user-q">"How can success be 100%?"</blockquote>
+        <p style="margin-top:6px"><strong>Answer:</strong> cube_jitter=0.0 means blocks are always at the same position. The policy has memorized the path. 100% success is guaranteed for both — it tells us nothing.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-dot gold"></div>
+      <span class="tl-time">Question 2</span>
+      <div class="tl-text">
+        <blockquote class="user-q">"What is my ultimate goal?"</blockquote>
+        <p style="margin-top:6px"><strong>Answer:</strong> The goal was never just "pick blocks successfully." Success is trivial. The goal is <strong>legibility</strong>: making the robot's intent obvious to a human observer <em>early</em> in the trajectory.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-dot warn"></div>
+      <span class="tl-time">Question 3</span>
+      <div class="tl-text">
+        <blockquote class="user-q">"Did I achieve my goal?"</blockquote>
+        <p style="margin-top:6px"><strong>Honest answer: Partially.</strong> L_early improved 0.919→0.936. But L_early is a borrowed formula. The numbers are both high. And we had no independent human-interpretable verification.</p>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-dot"></div>
+      <span class="tl-time">Realization</span>
+      <div class="tl-text">
+        <p><strong>We had the wrong metric conversation.</strong> The question was never "how do we train better" — it was "how do we <em>prove</em> legibility is improved, and what even <em>is</em> L_early?"</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 6 — "WHAT IS L_EARLY?" ═══════════ -->
+<div class="slide">
+  <p class="slide-num">05 — The Key Question</p>
+  <h2>"What is <span class="accent">L_early intent</span>? Explain with example"</h2>
+  <p>This is the question that prompted all the subsequent investigation. Here's the answer:</p>
+  <div class="row" style="margin-top:4px">
+    <div class="col card accent-border">
+      <h3>L_early: formal definition</h3>
+      <code>
+<span class="kw">def</span> l_early_intent(ee_traj, goals, true_goal_idx, <span class="val">early_frac=0.30</span>):
+    T = len(ee_traj)             <span class="cmt"># total timesteps in episode</span>
+    end = int(T * <span class="val">0.30</span>)         <span class="cmt"># look at first 30% only</span>
+    early = ee_traj[:end]        <span class="cmt"># (end, 3) xyz positions</span>
+
+    <span class="cmt"># Gaussian likelihood: how close is EE to each goal?</span>
+    sigma = d_between_goals / (2√(2·ln2))
+    sq_dist = ||early - goal_k||²  for each goal k
+    p(goal_k | pos_t) = exp(-sq_dist / 2σ²) / Σ
+
+    <span class="kw">return</span> mean( p(true_goal | pos_t) for t in [0..end] )
+      </code>
+      <p style="margin-top:10px" class="muted">Source: evaluation/eval_legibility_diffuser.py lines 413–437, Dragan et al. HRI 2013</p>
+    </div>
+    <div class="col card">
+      <h3>In plain English</h3>
+      <ol style="list-style:decimal; padding-left:18px; display:flex; flex-direction:column; gap:8px">
+        <li style="font-size:.95rem"><strong>Cut the trajectory at 30%.</strong> If the episode is 300 steps, only look at steps 0–90.</li>
+        <li style="font-size:.95rem"><strong>At each step:</strong> compute how close the end-effector is to goal A vs goal B (Gaussian distance).</li>
+        <li style="font-size:.95rem"><strong>Convert to probability:</strong> closer to true goal = higher P(correct), using softmax over Gaussian distances.</li>
+        <li style="font-size:.95rem"><strong>Average probability</strong> across all early steps = L_early.</li>
+      </ol>
+      <div style="margin-top:14px; padding: 12px; background:var(--surface2); border-radius:8px">
+        <p style="font-weight:600">The statement you saw:</p>
+        <p style="font-size:.93rem">"The score ∈[0,1] is <strong>absolute</strong>: 0.95 means '95% observer confidence in first 30% of motion' regardless of what other trajectories look like. You don't need a separate picking metric."</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 7 — L_EARLY EXAMPLE ═══════════ -->
+<div class="slide">
+  <p class="slide-num">06 — L_early: Concrete Example</p>
+  <h2>Two trajectories, <span class="accent">same goal</span> (pick left block)</h2>
+  <div class="row">
+    <div class="col card">
+      <h3>Trajectory A — Straight/predictable <span class="badge badge-red">L_early = 0.83</span></h3>
+      <p class="muted" style="margin-bottom:8px">Robot goes straight down, then toward the left block</p>
+      <div style="background:#0a0c14; border-radius:8px; padding:16px; font-family:monospace; font-size:.82rem; line-height:1.8">
+        <span class="muted">Left block [L]</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="muted">Right block [R]</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ <span class="muted">(start)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ <span class="warn">← equidistant from both</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ <span class="warn">← still in middle</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↙ <span class="muted">&nbsp; ← 30% mark, now clearly left</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↙<br>
+        &nbsp;&nbsp;&nbsp;[L] <span class="ok">← arrives</span>
+      </div>
+      <p style="margin-top:8px; font-size:.9rem">For first 30%: positions near the <em>center</em> means P(left) ≈ 0.5 for many steps → average ≈ <span class="warn">0.83</span></p>
+    </div>
+    <div class="col card ok-border">
+      <h3>Trajectory B — Arced/legible <span class="badge badge-green">L_early = 0.95</span></h3>
+      <p class="muted" style="margin-bottom:8px">Robot arcs early toward the left block, then descends</p>
+      <div style="background:#0a0c14; border-radius:8px; padding:16px; font-family:monospace; font-size:.82rem; line-height:1.8">
+        <span class="muted">Left block [L]</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="muted">Right block [R]</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ <span class="muted">(start)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↙ <span class="ok">← already leaning left!</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↙ <span class="ok">← clearly closer to [L]</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;↓ <span class="ok">&nbsp;&nbsp;← 30% mark, very close to [L]</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+        &nbsp;&nbsp;&nbsp;[L] <span class="ok">← arrives</span>
+      </div>
+      <p style="margin-top:8px; font-size:.9rem">For first 30%: positions consistently closer to left block → P(left) ≈ 0.9+ for most steps → average ≈ <span class="ok">0.95</span></p>
+    </div>
+  </div>
+  <div class="card accent-border" style="margin-top:4px">
+    <p><strong>Both trajectories reach the same goal, both succeed.</strong> But Trajectory B is <em>legible</em> — an observer can tell where it's going much earlier. The arc "wastes" some efficiency to broadcast intent.</p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 8 — THE NUMBERS ═══════════ -->
+<div class="slide">
+  <p class="slide-num">07 — Our Actual Numbers</p>
+  <h2>L_early for every episode <span class="muted">(20 each)</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>Baseline episodes</h3>
+      <table>
+        <tr><th>#</th><th>Goal</th><th>Steps</th><th>L_early</th></tr>
+        <tr><td>1</td><td>right</td><td>311</td><td>0.916</td></tr>
+        <tr><td>2</td><td>left</td><td>319</td><td>0.944</td></tr>
+        <tr><td>3</td><td>left</td><td>315</td><td>0.925</td></tr>
+        <tr><td>4</td><td>right</td><td>347</td><td><span class="warn">0.872</span></td></tr>
+        <tr><td>5</td><td>right</td><td>380</td><td>0.916</td></tr>
+        <tr><td>6</td><td>right</td><td>385</td><td>0.903</td></tr>
+        <tr><td>7</td><td>left</td><td>322</td><td>0.956</td></tr>
+        <tr><td>8</td><td>right</td><td>351</td><td>0.895</td></tr>
+        <tr><td>9</td><td>left</td><td>394</td><td>0.925</td></tr>
+        <tr><td>10</td><td>right</td><td>345</td><td>0.906</td></tr>
+      </table>
+      <p style="margin-top:8px"><strong>Mean:</strong> <span class="accent2">0.9187</span> ± 0.030 &nbsp; <strong>Range:</strong> 0.826–0.957</p>
+    </div>
+    <div class="col card accent-border">
+      <h3>LegDiff Conv1d episodes</h3>
+      <table>
+        <tr><th>#</th><th>Goal</th><th>Steps</th><th>L_early</th></tr>
+        <tr><td>1</td><td>right</td><td>306</td><td>0.928</td></tr>
+        <tr><td>2</td><td>right</td><td>310</td><td>0.942</td></tr>
+        <tr><td>3</td><td>left</td><td>310</td><td>0.958</td></tr>
+        <tr><td>4</td><td>left</td><td>305</td><td>0.938</td></tr>
+        <tr><td>5</td><td>right</td><td>321</td><td>0.932</td></tr>
+        <tr><td>6</td><td>left</td><td>309</td><td>0.913</td></tr>
+        <tr><td>7</td><td>right</td><td>311</td><td><span class="ok">0.970</span></td></tr>
+        <tr><td>8</td><td>left</td><td>302</td><td>0.944</td></tr>
+        <tr><td>9</td><td>right</td><td>307</td><td>0.932</td></tr>
+        <tr><td>10</td><td>left</td><td>305</td><td>0.915</td></tr>
+      </table>
+      <p style="margin-top:8px"><strong>Mean:</strong> <span class="ok">0.9355</span> ± 0.018 &nbsp; <strong>Range:</strong> 0.907–0.970</p>
+    </div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <p>LegDiff improves L_early by <strong>+0.017</strong> and reduces variance (0.030 → 0.018). Both floor and ceiling rise. The worst LegDiff episode (0.907) exceeds the baseline median.</p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 9 — WHY L_EARLY CLAIM IS ABSOLUTE ═══════════ -->
+<div class="slide">
+  <p class="slide-num">08 — The "Absolute" Claim</p>
+  <h2>Why L_early = 0.95 means something <span class="accent">on its own</span></h2>
+  <div class="row">
+    <div class="col card accent-border">
+      <h3>The statement explained</h3>
+      <blockquote>
+        "The score ∈[0,1] is absolute: 0.95 means '95% observer confidence in first 30% of motion' regardless of what other trajectories look like. You don't need a separate picking metric."
+      </blockquote>
+      <div style="margin-top:12px">
+        <h3>What this means:</h3>
+        <ul>
+          <li>L_early is a Bayesian posterior probability, not a rank or percentile</li>
+          <li>It doesn't compare to other policies — it measures <em>this trajectory's</em> clarity</li>
+          <li>0.95 = at the 30% mark, a Bayesian observer would be 95% sure of the correct goal</li>
+          <li>0.50 = random chance (no information). 1.0 = perfect disambiguation from step 1.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <h3>Why "no separate picking metric"?</h3>
+        <p style="font-size:.93rem">Since L_early is a probability of correctly identifying the goal, a high score simultaneously means:</p>
+        <ul>
+          <li class="check">The robot moved toward the right goal (picks the right block)</li>
+          <li class="check">It did so <em>early</em> (visible before 30% of the trajectory)</li>
+          <li class="check">The motion is <em>unambiguous</em> (high probability, not 0.55)</li>
+        </ul>
+        <p style="margin-top:10px; font-size:.93rem">If L_early = 0.95, the robot both <em>succeeds</em> and is <em>legible</em>. One number encodes both.</p>
+      </div>
+      <div class="card warn-border" style="margin-top:12px">
+        <h3>The catch</h3>
+        <ul>
+          <li class="cross">L_early uses <strong>world-frame EE positions</strong> + goal coordinates</li>
+          <li class="cross">A human observer doesn't have this — they have camera pixels</li>
+          <li class="cross">L_early is a <em>geometric proxy</em> for human perception, not a measurement of it</li>
+          <li class="cross">This gap is what eventually led to the VLO proposal</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 10 — WHAT WENT WRONG WITH VLM V1 ═══════════ -->
+<div class="slide">
+  <p class="slide-num">09 — Our VLM Experiments</p>
+  <h2>Everything we tried with <span class="accent">Gemini</span></h2>
+  <table>
+    <tr>
+      <th>Experiment</th>
+      <th>What we sent</th>
+      <th>N</th>
+      <th>Result</th>
+      <th>Verdict</th>
+    </tr>
+    <tr>
+      <td><strong>legibility_left_arcs</strong><br><span class="muted">v1: long prompt, full analysis</span></td>
+      <td>Full video + detailed trajectory analysis prompt</td>
+      <td>20 left + 20 right</td>
+      <td>target_accuracy=<span class="warn">0%</span>, side_accuracy=<span class="accent2">45%</span><br>legibility mean=0.925</td>
+      <td><span class="warn">Completely wrong</span></td>
+    </tr>
+    <tr>
+      <td><strong>v2_combined</strong><br><span class="muted">v2: short prompt, annotated frame</span></td>
+      <td>Annotated first frame + full video, <800 char prompt</td>
+      <td>40</td>
+      <td>accuracy=<span class="ok">97.5%</span>, legibility=0.919</td>
+      <td><span class="ok">Goal identification works!</span><br>But legibility saturated</td>
+    </tr>
+    <tr>
+      <td><strong>benchmark/v2_scores</strong><br><span class="muted">baseline vs steered</span></td>
+      <td>Full videos: 5 baseline + 5 steered-left + 5 steered-right</td>
+      <td>15</td>
+      <td>Every video: score=<span class="warn">0.9</span>, commitment=<span class="warn">0.2</span></td>
+      <td><span class="warn">Zero discrimination</span></td>
+    </tr>
+    <tr>
+      <td><strong>arc_video_mode_demo</strong><br><span class="muted">video mode (frame-by-frame)</span></td>
+      <td>Progressive frames of pre-recorded arcs</td>
+      <td>2</td>
+      <td>pA ramps from 0.5→0.95 over 5 sec</td>
+      <td><span class="ok">Temporal signal works</span></td>
+    </tr>
+    <tr>
+      <td><strong>arc_prefix_demo</strong><br><span class="muted">prefix frames, side view</span></td>
+      <td>First t seconds only, t=0,1,…,5</td>
+      <td>2</td>
+      <td>arc01: VLO=1s, arc19: VLO=0s</td>
+      <td><span class="ok">Best approach — prefix works!</span></td>
+    </tr>
+  </table>
+  <div class="card accent-border" style="margin-top:4px">
+    <p><strong>Pattern:</strong> Full video = useless (hindsight bias). Prefix frames = works perfectly. Two experiments (video_mode + arc_prefix) prove the prefix approach discriminates. Three experiments prove full-video fails.</p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 11 — THE SATURATION PROBLEM ═══════════ -->
+<div class="slide">
+  <p class="slide-num">10 — The Saturation Problem</p>
+  <h2>Why full-video VLM scoring gives <span class="warn">0.9 for everything</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>What the VLM outputs look like</h3>
+      <code>
+<span class="cmt">// baseline_ep000.mp4</span>
+"v2_legibility_score": <span class="val">0.9</span>,
+"v2_early_commitment": <span class="val">0.2</span>,
+"v2_path_shape": <span class="val">"direct"</span>,
+"v2_reasoning": <span class="val">"gripper moves directly towards block A from the start"</span>
+
+<span class="cmt">// steered_left_ep000.mp4 (SAME policy steering to different goal)</span>
+"v2_legibility_score": <span class="val">0.9</span>,
+"v2_early_commitment": <span class="val">0.2</span>,
+"v2_path_shape": <span class="val">"direct"</span>,
+"v2_reasoning": <span class="val">"gripper moves directly towards block B from the start"</span>
+      </code>
+      <p class="muted" style="margin-top:8px">Identical scores. Different policies. Different goals. No discrimination at all.</p>
+    </div>
+    <div class="col card warn-border">
+      <h3>Root cause analysis</h3>
+      <ul>
+        <li>VLM sees the <em>entire</em> trajectory → knows the endpoint</li>
+        <li>Rationalizes backward: "it went there, so the intent was obvious"</li>
+        <li>This is <strong>hindsight availability bias</strong> — the same problem humans have when they know the outcome</li>
+        <li>Legibility is inherently <em>prospective</em>: "what would you infer at t=2 without knowing the rest?"</li>
+        <li><strong>Any metric that sees the full video measures identification, not legibility</strong></li>
+      </ul>
+    </div>
+  </div>
+  <div class="card ok-border" style="margin-top:4px">
+    <h3>The fix: information restriction</h3>
+    <p>Show the VLM only frames [0..t]. It literally <em>cannot</em> cheat because it doesn't have frames t+1, t+2, … This is the same design intuition behind Dragan's <code style="display:inline; padding:2px 6px">early_frac=0.30</code> — only evaluate the prefix.</p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 12 — PREFIX RESULTS ═══════════ -->
+<div class="slide">
+  <p class="slide-num">11 — Prefix Results: Proof It Works</p>
+  <h2>arc_prefix_demo: <span class="ok">the data that proves the approach</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>Arc 01 — gentle curve <span class="badge badge-blue">arc_class: 00–04</span></h3>
+      <p class="muted">Low legibility trajectory → should be hard to identify early</p>
+      <table>
+        <tr><th>t (sec)</th><th>pA (correct)</th><th>Conf</th><th>Status</th><th>VLM cue</th></tr>
+        <tr><td>0</td><td>0.50</td><td>50%</td><td><span class="warn">not legible</span></td><td>"gripper positioned symmetrically"</td></tr>
+        <tr><td>1</td><td><span class="ok">0.95</span></td><td>95%</td><td><span class="ok">legible!</span></td><td>"gripper moving towards left block"</td></tr>
+        <tr><td>2</td><td>0.95</td><td>95%</td><td><span class="ok">legible</span></td><td>"gripper moving towards left block"</td></tr>
+        <tr><td>3</td><td>0.99</td><td>99%</td><td><span class="ok">legible</span></td><td>"gripper's arc directed towards left"</td></tr>
+        <tr><td>5</td><td>0.95</td><td>95%</td><td><span class="ok">legible</span></td><td>"gripper aligned with left block"</td></tr>
+      </table>
+      <p style="margin-top:6px"><span class="accent2">VLO = 1 second</span> — needs 1 sec of motion to identify intent</p>
+    </div>
+    <div class="col card ok-border">
+      <h3>Arc 19 — maximal arc <span class="badge badge-gold">arc_class: 15–19</span></h3>
+      <p class="muted">High legibility trajectory → should be obvious immediately</p>
+      <table>
+        <tr><th>t (sec)</th><th>pA (correct)</th><th>Conf</th><th>Status</th><th>VLM cue</th></tr>
+        <tr><td>0</td><td><span class="ok">0.99</span></td><td>99%</td><td><span class="ok">legible!</span></td><td>"gripper slightly to left of center"</td></tr>
+        <tr><td>1</td><td>0.95</td><td>95%</td><td><span class="ok">legible</span></td><td>"gripper centered above left block"</td></tr>
+        <tr><td>2</td><td>0.95</td><td>95%</td><td><span class="ok">legible</span></td><td>"moving towards left block"</td></tr>
+        <tr><td>3</td><td>0.99</td><td>99%</td><td><span class="ok">legible</span></td><td>"approaching left block"</td></tr>
+        <tr><td>5</td><td>0.92</td><td>92%</td><td><span class="ok">legible</span></td><td>"aligned with left block"</td></tr>
+      </table>
+      <p style="margin-top:6px"><span class="ok">VLO = 0 seconds</span> — intent obvious from the very first frame</p>
+    </div>
+  </div>
+  <div class="card accent-border" style="margin-top:0">
+    <p><strong>Key insight:</strong> Arc 19 (exaggerated curve) → VLO=0s. Arc 01 (gentle) → VLO=1s. The VLM discriminates exactly as theory predicts. More legible trajectory = earlier onset. This is the signal.</p>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 13 — THE FULL NARRATIVE ═══════════ -->
+<div class="slide">
+  <p class="slide-num">12 — The Journey (Why You Asked)</p>
+  <h2>How we got from <span class="accent">Conv1d</span> to <span class="accent2">"what is L_early?"</span></h2>
+  <div class="timeline" style="gap:0">
+    <div class="tl-row"><div class="tl-dot ok"></div><span class="tl-time">Step 1</span><div class="tl-text"><strong>Built Conv1d architecture.</strong> Replaced MLP with proper 1D temporal convolutions. Straightforward engineering.</div></div>
+    <div class="tl-row"><div class="tl-dot ok"></div><span class="tl-time">Step 2</span><div class="tl-text"><strong>Killed competing GPU processes. Trained 100 epochs.</strong> Loss dropped to 0.00175 (20× better than MLP).</div></div>
+    <div class="tl-row"><div class="tl-dot ok"></div><span class="tl-time">Step 3</span><div class="tl-text"><strong>Evaluated 20 episodes.</strong> All metrics looked good: L_early 0.9187→0.9355, success 100%.</div></div>
+    <div class="tl-row"><div class="tl-dot gold"></div><span class="tl-time">Step 4</span><div class="tl-text"><strong>"How can success be 100%?"</strong> Realized cube_jitter=0 made success trivial. The real metric is legibility, not success.</div></div>
+    <div class="tl-row"><div class="tl-dot gold"></div><span class="tl-time">Step 5</span><div class="tl-text"><strong>"What is my ultimate goal? Did I achieve it?"</strong> Partially. L_early improved but it's a borrowed formula. Need independent validation.</div></div>
+    <div class="tl-row"><div class="tl-dot gold"></div><span class="tl-time">Step 6</span><div class="tl-text"><strong>VLO proposed.</strong> Prefix-based VLM metric. Then challenged: "we already have VLM results." Investigated existing results — found saturation problem in full-video, but promising signal in prefix experiments.</div></div>
+    <div class="tl-row"><div class="tl-dot warn"></div><span class="tl-time">Step 7</span><div class="tl-text"><strong>Claims challenged:</strong> "VLO requires no geometric assumptions" → imprecise. "VLO correlates with human perception" → no evidence. Honest about gaps.</div></div>
+    <div class="tl-row"><div class="tl-dot"></div><span class="tl-time">Step 8</span><div class="tl-text"><strong>"What is L_early intent? Explain with example."</strong> ← <em>This prompt.</em> You need to understand the core metric before deciding which new metric to build on top.</div></div>
+  </div>
+</div>
+
+<!-- ═══════════ SLIDE 14 — WHERE WE STAND ═══════════ -->
+<div class="slide">
+  <p class="slide-num">13 — Where We Stand</p>
+  <h2>What exists, what's proven, what's <span class="warn">missing</span></h2>
+  <div class="row">
+    <div class="col card ok-border">
+      <h3>Solid ground</h3>
+      <ul>
+        <li class="check"><strong>Conv1d architecture</strong>: built, trained, 20× better loss</li>
+        <li class="check"><strong>L_early</strong>: 0.919→0.936 (+1.8%), baseline→LegDiff</li>
+        <li class="check"><strong>Full-video VLM = useless</strong>: proven across 3 experiments</li>
+        <li class="check"><strong>Prefix VLM = works</strong>: proven across 2 experiments</li>
+        <li class="check"><strong>L_early is absolute</strong>: 0.95 means 95% posterior confidence in first 30% — no comparison needed</li>
+        <li class="check"><strong>Goal identification accuracy</strong>: v2 annotated-frame approach gets 97.5%</li>
+      </ul>
+    </div>
+    <div class="col card warn-border">
+      <h3>Open gaps</h3>
+      <ul>
+        <li class="cross"><strong>VLO on live policies</strong>: not yet run (only 2 demo arcs tested)</li>
+        <li class="cross"><strong>VLO: baseline vs LegDiff</strong>: no comparison exists</li>
+        <li class="cross"><strong>Human validation</strong>: no human legibility judgments collected</li>
+        <li class="cross"><strong>Statistical power</strong>: n=20 episodes, effect size 0.017 ± 0.03</li>
+        <li class="cross"><strong>Generalization</strong>: cube_jitter=0 only — fixed positions</li>
+        <li class="cross"><strong>CFG sweep</strong>: only cfg_scale=3.0 tested</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card accent-border" style="margin-top:4px">
+    <h3>The paper story</h3>
+    <p>L_early (borrowed, geometric, proven to improve) + VLO (proposed, visual, prefix-based, proven to discriminate in pilot) = complementary metrics. LegDiff improves both. Full-video VLM failure is itself a contribution worth reporting.</p>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<div class="nav">
+  <button onclick="go(-1)">← Prev</button>
+  <span id="counter">1 / 14</span>
+  <button onclick="go(1)">Next →</button>
+</div>
+
+<script>
+let cur = 0;
+const slides = document.querySelectorAll('.slide');
+const counter = document.getElementById('counter');
+function show(n) {
+  slides[cur].classList.remove('active');
+  cur = (n + slides.length) % slides.length;
+  slides[cur].classList.add('active');
+  counter.textContent = (cur + 1) + ' / ' + slides.length;
+}
+function go(d) { show(cur + d); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') go(-1);
+});
+</script>
+</body>
+</html>

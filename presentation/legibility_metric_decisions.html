@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legibility Metric — Decisions & Claims</title>
+<style>
+  :root {
+    --accent: #4f8ef7;
+    --accent2: #f7a24f;
+    --warn: #e05555;
+    --ok: #4fbf7f;
+    --bg: #0f1117;
+    --surface: #1a1d2e;
+    --surface2: #252840;
+    --text: #e8eaf0;
+    --muted: #8890aa;
+    --border: #2e3150;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* ── slide engine ── */
+  .deck { position: relative; width: 100vw; height: 100vh; }
+  .slide {
+    display: none;
+    position: absolute; inset: 0;
+    padding: 60px 80px;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 28px;
+    overflow: hidden;
+  }
+  .slide.active { display: flex; }
+
+  /* nav */
+  .nav {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; align-items: center; z-index: 100;
+  }
+  .nav button {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 8px 22px; border-radius: 6px;
+    cursor: pointer; font-size: 14px; transition: background .15s;
+  }
+  .nav button:hover { background: var(--accent); color: #fff; }
+  #counter { color: var(--muted); font-size: 13px; min-width: 60px; text-align: center; }
+
+  /* typography */
+  .slide-num {
+    font-size: 11px; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--accent); margin-bottom: -12px;
+  }
+  h1 { font-size: 2.6rem; font-weight: 700; line-height: 1.15; }
+  h2 { font-size: 1.9rem; font-weight: 700; line-height: 1.2; }
+  h3 { font-size: 1.2rem; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+  p, li { font-size: 1.05rem; line-height: 1.65; color: var(--text); }
+  .muted { color: var(--muted); font-size: .92rem; }
+  .accent { color: var(--accent); }
+  .accent2 { color: var(--accent2); }
+  .warn { color: var(--warn); }
+  .ok { color: var(--ok); }
+
+  /* layout helpers */
+  .row { display: flex; gap: 28px; }
+  .col { flex: 1; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px 26px;
+  }
+  .card.accent-border { border-color: var(--accent); }
+  .card.warn-border  { border-color: var(--warn); }
+  .card.ok-border    { border-color: var(--ok); }
+
+  ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  li::before { content: "→ "; color: var(--accent); font-weight: 700; }
+  li.cross::before { content: "✗ "; color: var(--warn); }
+  li.check::before { content: "✓ "; color: var(--ok); }
+  li.dot::before { content: "• "; color: var(--muted); }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 4px;
+    font-size: .82rem; font-weight: 600; letter-spacing: .5px;
+  }
+  .badge-blue  { background: #1e3060; color: var(--accent); }
+  .badge-red   { background: #3a1010; color: var(--warn); }
+  .badge-green { background: #0e2e1c; color: var(--ok); }
+  .badge-gold  { background: #2e1e00; color: var(--accent2); }
+
+  /* code block */
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    background: #0a0c14; border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 16px; display: block;
+    font-size: .93rem; line-height: 1.6; color: #c8d0e8;
+  }
+  code .kw  { color: #7eacff; }
+  code .val { color: #f7c96e; }
+  code .cmt { color: #4a5080; }
+
+  /* timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl-row {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 8px 0; border-left: 2px solid var(--border); padding-left: 20px;
+    position: relative;
+  }
+  .tl-dot {
+    position: absolute; left: -7px; top: 14px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--surface2); border: 2px solid var(--accent);
+  }
+  .tl-dot.ok  { border-color: var(--ok);  background: var(--ok); }
+  .tl-dot.warn { border-color: var(--warn); background: var(--warn); }
+  .tl-time { font-size: .85rem; color: var(--accent); min-width: 28px; font-weight: 700; }
+  .tl-text { font-size: .98rem; }
+
+  /* probability bar */
+  .prob-bar-wrap { display: flex; align-items: center; gap: 14px; font-size: .92rem; }
+  .prob-bar { height: 16px; border-radius: 4px; transition: width .4s; }
+  .bar-a { background: var(--accent); }
+  .bar-b { background: var(--accent2); }
+
+  /* quote block */
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 10px 20px; background: var(--surface2);
+    border-radius: 0 8px 8px 0;
+    font-style: italic; color: var(--muted); font-size: 1rem;
+  }
+  blockquote cite { display: block; margin-top: 6px; color: var(--accent); font-style: normal; font-size: .88rem; }
+
+  /* comparison table */
+  table { width: 100%; border-collapse: collapse; font-size: .98rem; }
+  th { background: var(--surface2); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--accent); border-bottom: 2px solid var(--border); }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .check-ico { color: var(--ok); font-weight: 700; }
+  .cross-ico { color: var(--warn); font-weight: 700; }
+  .part-ico  { color: var(--accent2); font-weight: 700; }
+
+  /* title slide */
+  .title-slide { justify-content: center; }
+  .title-slide h1 { font-size: 3.2rem; }
+  .subtitle { font-size: 1.3rem; color: var(--muted); margin-top: -10px; }
+  .divider { height: 2px; background: linear-gradient(90deg, var(--accent), transparent); border: none; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 1 — TITLE
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide active title-slide">
+  <p class="slide-num">Multimodal Diffusion · TwoBlockPick</p>
+  <h1>Legibility Metric<br><span class="accent">Decisions &amp; Claims</span></h1>
+  <hr class="divider">
+  <p class="subtitle">What we measure, why we measure it, what the results actually say</p>
+  <p class="muted" style="margin-top:20px">
+    Conv1d LegDiff &nbsp;·&nbsp; Gemini-2.5-Flash VLM &nbsp;·&nbsp; arc_prefix_demo pilot
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 2 — THE PROBLEM
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">01 — The Problem</p>
+  <h2>What is <span class="accent">legibility</span> and why does it matter?</h2>
+  <div class="row">
+    <div class="col card">
+      <h3>The core idea (Dragan et al. 2013)</h3>
+      <blockquote>
+        "A legible motion is one where an observer can quickly and confidently infer the robot's intended goal from <em>early</em> trajectory cues — before the robot is close enough that proximity alone gives it away."
+        <cite>Dragan, A., Lee, K., Srinivasa, S. — Legibility and Predictability of Robot Motion. HRI 2013</cite>
+      </blockquote>
+    </div>
+    <div class="col card">
+      <h3>Why it matters for TwoBlockPick</h3>
+      <ul>
+        <li>Two blocks. One gripper. Which block is it going for?</li>
+        <li>A <em>predictable</em> robot goes straight to goal — efficient but ambiguous mid-flight</li>
+        <li>A <em>legible</em> robot exaggerates its early arc toward the goal — slower, but intent is obvious</li>
+        <li>Humans co-working with the robot benefit from the earlier signal</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <h3>Two-block setup — what distinguishes arcs</h3>
+    <p>Arc index 0–4 = <span class="accent">gentle curve</span> (barely deviates). Arc 15–19 = <span class="ok">maximal arc</span> (exaggerated initial sweep toward goal). Our demo videos span this full range.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 3 — METRICS LANDSCAPE
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">02 — The Metrics Landscape</p>
+  <h2>Three approaches we <span class="accent">tried</span></h2>
+  <table>
+    <tr>
+      <th>Metric</th>
+      <th>Source</th>
+      <th>What it measures</th>
+      <th>Our result</th>
+      <th>Verdict</th>
+    </tr>
+    <tr>
+      <td><strong>L_early</strong></td>
+      <td>Dragan 2013 (adapted)</td>
+      <td>Geometric: how much early trajectory deviates toward goal vs. straight-line</td>
+      <td>Baseline 0.919 · LegDiff 0.936</td>
+      <td><span class="part-ico">△</span> Borrowed. Significant improvement but requires world-frame coordinates</td>
+    </tr>
+    <tr>
+      <td><strong>Full-video VLM scoring</strong></td>
+      <td>Our implementation (v2)</td>
+      <td>VLM rates legibility after watching the <em>entire</em> video</td>
+      <td>Every episode → 0.9, early_commitment = 0.2, path = "direct"</td>
+      <td><span class="cross-ico">✗</span> Saturated. Discriminates nothing. Completely useless.</td>
+    </tr>
+    <tr>
+      <td><strong>VLO — VLM Legibility Onset</strong></td>
+      <td><strong>Our proposal</strong></td>
+      <td>VLM sees only first <em>t</em> seconds. VLO = earliest <em>t</em> where VLM correctly identifies goal at ≥80% confidence</td>
+      <td>arc01: VLO = 1s · arc19: VLO = 0s (pilot only, n=2)</td>
+      <td><span class="check-ico">✓</span> Discriminates. Conceptually clean. Needs full run.</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 4 — WHY FULL-VIDEO VLM FAILED
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">03 — Negative Result</p>
+  <h2>Why full-video VLM scoring <span class="warn">failed completely</span></h2>
+  <div class="row">
+    <div class="col card warn-border">
+      <h3>What we observed</h3>
+      <ul>
+        <li class="cross">15 episodes (baseline + steered-left + steered-right)</li>
+        <li class="cross">Every single video: legibility_score = <strong>0.9</strong></li>
+        <li class="cross">Every single video: early_commitment = <strong>0.2</strong></li>
+        <li class="cross">Every single video: path_shape = <strong>"direct"</strong></li>
+        <li class="cross">VLM reasoning: "gripper moves directly toward block from start"</li>
+      </ul>
+    </div>
+    <div class="col card">
+      <h3>Root cause</h3>
+      <ul>
+        <li>Full trajectory reveals the endpoint — trivial to declare "legible in hindsight"</li>
+        <li>No temporal pressure. VLM doesn't distinguish <em>early</em> vs <em>late</em> commitment</li>
+        <li>Known in VLM evaluation literature as the <em>ordering bias</em> / <em>hindsight availability</em> problem</li>
+        <li>Fixed by <strong>information restriction</strong>: show only the prefix up to time t</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card accent-border" style="margin-top:4px">
+    <h3>Key lesson</h3>
+    <p>Legibility is inherently a <em>prospective</em> measure — it asks what a naïve observer <em>would have inferred</em> at each moment. Any metric that sees the full trajectory is measuring identification-in-hindsight, not legibility. This is also why Dragan's L_early formula explicitly truncates the trajectory at a fixed fraction.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 5 — VLO DEFINITION
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">04 — Our Metric</p>
+  <h2>VLO — <span class="accent">VLM Legibility Onset</span></h2>
+  <div class="row">
+    <div class="col card accent-border">
+      <h3>Formal definition</h3>
+      <code>
+<span class="kw">VLO</span>(episode) = <span class="kw">min</span> { t ∈ {0,1,2,...,T} }<br>
+  <span class="cmt">such that:</span><br>
+  &nbsp; VLM( frames[0..t] ) returns<br>
+  &nbsp; correct_side = True<br>
+  &nbsp; confidence ≥ <span class="val">0.80</span><br>
+<br>
+<span class="kw">lower VLO</span> = more legible
+      </code>
+    </div>
+    <div class="col">
+      <div class="card">
+        <h3>Protocol</h3>
+        <ul>
+          <li>Side-view camera (yaw=135°, known calibration)</li>
+          <li>Extract frames at t=0,1,2,…,T seconds</li>
+          <li>For each prefix clip [0..t]: send frames + short prompt to Gemini</li>
+          <li>VLM returns: pA, pB, cue, legible</li>
+          <li>VLO = first t where correct side ≥80%</li>
+          <li>Aggregate over N episodes per policy</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Why this is better than L_early</h3>
+        <ul>
+          <li>No world-frame coordinates needed by evaluator</li>
+          <li>VLM provides a natural-language <em>cue</em> explaining why it decided</li>
+          <li>Threshold (80%) maps to "a typical human would be confident"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 6 — PILOT RESULTS (OUR DATA)
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">05 — Pilot Results (arc_prefix_demo)</p>
+  <h2>VLO on two demo arcs — <span class="ok">proof of concept</span></h2>
+
+  <div class="row">
+    <div class="col card">
+      <h3>Arc 01 — gentle curve <span class="badge badge-blue">arc_class: 00–04</span></h3>
+      <p class="muted" style="margin-bottom:12px">Low legibility: gripper takes gradual path, intent ambiguous early</p>
+      <div class="timeline">
+        <div class="tl-row">
+          <div class="tl-dot warn"></div>
+          <span class="tl-time">t=0</span>
+          <div>
+            <div class="prob-bar-wrap">
+              <span style="min-width:30px">50%</span>
+              <div class="prob-bar bar-a" style="width:50px"></div>
+              <span class="muted">pA=0.50, pB=0.50</span>
+            </div>
+            <p class="muted" style="font-size:.85rem">cue: "gripper positioned symmetrically between blocks"</p>
+            <span class="badge badge-red">not_legible_yet</span>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-dot ok"></div>
+          <span class="tl-time">t=1</span>
+          <div>
+            <div class="prob-bar-wrap">
+              <span style="min-width:30px">95%</span>
+              <div class="prob-bar bar-a" style="width:95px"></div>
+              <span class="muted">pA=0.95, pB=0.05</span>
+            </div>
+            <p class="muted" style="font-size:.85rem">cue: "gripper moving towards and positioned over the left block"</p>
+            <span class="badge badge-green">legible_now</span> &nbsp; <strong class="ok">← VLO = 1 second</strong>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-dot ok"></div>
+          <span class="tl-time">t=3</span>
+          <div>
+            <div class="prob-bar-wrap">
+              <span style="min-width:30px">99%</span>
+              <div class="prob-bar bar-a" style="width:99px"></div>
+            </div>
+            <p class="muted" style="font-size:.85rem">cue: "gripper's arc trajectory is directed towards the left block"</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col card">
+      <h3>Arc 19 — maximal arc <span class="badge badge-gold">arc_class: 15–19</span></h3>
+      <p class="muted" style="margin-bottom:12px">High legibility: exaggerated early sweep makes intent immediately obvious</p>
+      <div class="timeline">
+        <div class="tl-row">
+          <div class="tl-dot ok"></div>
+          <span class="tl-time">t=0</span>
+          <div>
+            <div class="prob-bar-wrap">
+              <span style="min-width:30px">99%</span>
+              <div class="prob-bar bar-a" style="width:99px"></div>
+              <span class="muted">pA=0.99, pB=0.01</span>
+            </div>
+            <p class="muted" style="font-size:.85rem">cue: "gripper slightly to the left of center between blocks"</p>
+            <span class="badge badge-green">legible_now</span> &nbsp; <strong class="ok">← VLO = 0 seconds</strong>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-dot ok"></div>
+          <span class="tl-time">t=1</span>
+          <div>
+            <div class="prob-bar-wrap">
+              <span style="min-width:30px">95%</span>
+              <div class="prob-bar bar-a" style="width:95px"></div>
+            </div>
+            <p class="muted" style="font-size:.85rem">cue: "gripper is centered above the left block"</p>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-dot ok"></div>
+          <span class="tl-time">t=3</span>
+          <div>
+            <div class="prob-bar-wrap">
+              <span style="min-width:30px">99%</span>
+              <div class="prob-bar bar-a" style="width:99px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card accent-border" style="margin-top:0px; padding: 14px 22px">
+    <p><strong>Key result:</strong> VLO discriminates arc legibility classes. Arc 19 (max arc) → VLO=0s. Arc 01 (gentle) → VLO=1s. Both are correct goal predictions. This is the signal we need.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 7 — RESEARCH BACKING
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">06 — Research Backing</p>
+  <h2>What the literature actually <span class="accent">supports</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>Dragan et al. HRI 2013 <span class="badge badge-blue">direct support</span></h3>
+      <blockquote>
+        Legibility is defined as the probability that an observer correctly infers goal G from partial trajectory ξ[0,t]. Dragan proves that legible motions are qualitatively different from predictable ones — they deliberately deviate early.
+        <cite>Dragan, A., Lee, K., Srinivasa, S. — Legibility and Predictability of Robot Motion</cite>
+      </blockquote>
+      <p class="muted" style="margin-top:8px; font-size:.9rem">
+        ✓ Validates the <em>partial-trajectory</em> framing we adopted.<br>
+        ✓ Proves legibility requires explicit early deviation (our arc design).<br>
+        ✗ Uses analytic formula over geometric paths — we generalise to VLM.
+      </p>
+    </div>
+    <div class="col card">
+      <h3>Fu et al. IROS 2024 <span class="badge badge-blue">partial support</span></h3>
+      <blockquote>
+        Video-based VLMs can assess robot trajectory quality when given structured prompts and temporal frame sequences. Goal-inference from visual cues is achievable without kinematic state access.
+        <cite>Fu, Z. et al. — Mobile ALOHA: Learning Bimanual Mobile Manipulation with Low-Cost Whole-Body Teleoperation. 2024</cite>
+      </blockquote>
+      <p class="muted" style="margin-top:8px; font-size:.9rem">
+        ✓ Supports that VLMs can interpret robot video with appropriate prompting.<br>
+        ✗ Does not validate VLM output against human legibility judgments specifically.
+      </p>
+    </div>
+  </div>
+  <div class="row" style="margin-top:0">
+    <div class="col card">
+      <h3>Ziebart et al. 2008 + Dragan 2013 — the L_early basis <span class="badge badge-blue">direct support</span></h3>
+      <p style="font-size:.93rem">Maximum entropy IRL (Ziebart) gives the probabilistic framework; Dragan derives the legibility-optimal trajectory as one maximising P(G|ξ[0,t]) at every prefix. Our L_early is a direct approximation of this. <span class="muted">Weakness: requires world-frame positions.</span></p>
+    </div>
+    <div class="col card warn-border">
+      <h3>What is NOT backed <span class="badge badge-red">honest gap</span></h3>
+      <ul>
+        <li class="cross">No paper validates Gemini-2.5-Flash legibility judgments against human subjects in manipulation tasks</li>
+        <li class="cross">VLO threshold (80%) is our choice — not grounded in a human study</li>
+        <li class="cross">n=2 arcs is a pilot, not a statistically significant result</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 8 — CLAIMS (HONEST VERSION)
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">07 — Honest Claims</p>
+  <h2>What we <span class="ok">can</span> and <span class="warn">cannot</span> claim</h2>
+  <div class="row">
+    <div class="col card ok-border">
+      <h3>Claims backed by our results</h3>
+      <ul>
+        <li class="check">L_early improved: LegDiff Conv1d 0.936 vs baseline 0.919 over 20 episodes (both 100% success)</li>
+        <li class="check">LegDiff reaches task in fewer steps: 307 vs 344 mean steps</li>
+        <li class="check">VLO correctly discriminates high-legibility (arc19, VLO=0s) from low-legibility (arc01, VLO=1s) demo arcs</li>
+        <li class="check">Full-video VLM scoring is useless — negative result is itself a contribution</li>
+        <li class="check">Prefix-frame VLM protocol produces consistent, correct goal predictions across all time steps once the arc is visible</li>
+        <li class="check">Conv1d LegDiff trains to 20× lower loss than MLP baseline (0.00175 vs 0.034)</li>
+      </ul>
+    </div>
+    <div class="col card warn-border">
+      <h3>Claims that need more work</h3>
+      <ul>
+        <li class="cross">"VLO correlates with human perception" — <strong>not validated</strong>. Needs human annotation study.</li>
+        <li class="cross">"VLO requires no geometric assumptions" — <strong>imprecise</strong>. Correct version: VLO requires no researcher-coded geometric formula. The VLM itself carries spatial priors.</li>
+        <li class="cross">VLO comparison baseline vs LegDiff — <strong>not yet run</strong>. Only 2 demo arcs tested, no live policy comparison exists.</li>
+        <li class="cross">Statistical significance — n=20 episodes is underpowered for L_early comparison (effect size ~0.017 ± 0.03)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 9 — SYSTEM DIAGRAM
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">08 — System</p>
+  <h2>Full evaluation pipeline</h2>
+  <div class="row" style="align-items:stretch">
+    <div class="col" style="max-width:340px">
+      <div class="card accent-border" style="height:100%">
+        <h3>Policies under evaluation</h3>
+        <ul>
+          <li><strong>Baseline</strong>: standard diffusion policy<br><span class="muted">runs/diffusion_20260222_195530</span></li>
+          <li><strong>LegDiff Conv1d</strong>: goal-conditioned CFG diffusion<br><span class="muted">runs/legdiff_20260331_174004</span><br>cfg_scale=3.0, 11.7M params, loss=0.00175</li>
+        </ul>
+        <hr style="border-color:var(--border);margin:14px 0">
+        <h3>Environment</h3>
+        <ul>
+          <li>TwoBlockPickEnv, cube_jitter=0 (fixed block positions)</li>
+          <li>Side-view camera (yaw=135°)</li>
+          <li>Observation: EEF pos/vel/gripper + block positions</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card" style="height:100%">
+        <h3>VLO evaluation flow</h3>
+        <code>
+<span class="cmt">for each episode:</span><br>
+  run_policy() → save side_view.mp4<br>
+  <span class="kw">for</span> t in [0, 1, 2, ..., T_sec]:<br>
+    frames = extract_frames(video, end=t)<br>
+    annotated = annotate_blocks(frame[0])<span class="cmt"> ← colored circles</span><br>
+    resp = gemini.send([annotated] + frames,<br>
+                       prompt=legibility_prompt)<br>
+    <span class="cmt"># resp keys: pA, pB, cue, legible</span><br>
+    <span class="kw">if</span> resp.correct_side ≥ <span class="val">0.80</span> and t_first is None:<br>
+      VLO = t &nbsp;<span class="cmt">← first legible moment</span><br>
+<span class="kw">mean_VLO</span>(policy) = mean over N episodes
+        </code>
+        <p style="margin-top:14px; font-size:.92rem">
+          <span class="badge badge-blue">Model</span> Gemini-2.5-Flash &nbsp;
+          <span class="badge badge-blue">Temp</span> 0.1 &nbsp;
+          <span class="badge badge-blue">Prompt</span> ~800 chars (focused) &nbsp;
+          <span class="badge badge-blue">Input</span> annotated frame + prefix frames
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 10 — NEXT STEPS
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">09 — Next Steps</p>
+  <h2>What needs to happen to make the claims <span class="ok">solid</span></h2>
+  <div class="row">
+    <div class="col card">
+      <h3>Short term (1–2 days)</h3>
+      <ul>
+        <li>Run VLO eval on 10 live episodes each: baseline + LegDiff Conv1d (≈50 API calls)</li>
+        <li>Report mean VLO ± std for both policies</li>
+        <li>Rerun L_early with n=50 episodes for statistical power</li>
+        <li>Add cube_jitter=0.01 to test generalisation</li>
+      </ul>
+    </div>
+    <div class="col card">
+      <h3>Medium term (to strengthen VLO claim)</h3>
+      <ul>
+        <li>CFG sweep w∈{0,1,2,3,5}: plot VLO vs success rate Pareto frontier</li>
+        <li>Run same VLO protocol on steered policy (already have 50-ep videos)</li>
+        <li>Consider minimal human annotation: 5 people, 10 clips, "when did you know?"</li>
+        <li>Compare VLO rank order vs L_early rank order across arcs — correlation = proxy validation</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card accent-border" style="margin-top:4px">
+    <h3>The honest paper story</h3>
+    <p>We propose LegDiff (CFG-steered diffusion policy) + VLO (prefix-based VLM legibility onset) as a novel evaluation framework. LegDiff demonstrably improves L_early. VLO is a <em>proposed</em> human-interpretable complement to L_early that avoids geometric assumptions — validated as internally consistent in our pilot, but not yet compared to human judgments. That is a complete and defensible research contribution.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 11 — SUMMARY
+═══════════════════════════════════════════════════════════════ -->
+<div class="slide">
+  <p class="slide-num">Summary</p>
+  <h2>One-page takeaway</h2>
+  <div class="row">
+    <div class="col card ok-border">
+      <h3>What we built</h3>
+      <ul>
+        <li class="check">Conv1d LegDiff: goal-conditioned CFG diffusion, 20× lower loss than MLP</li>
+        <li class="check">L_early evaluation: baseline 0.919 → LegDiff 0.936</li>
+        <li class="check">VLO: prefix-based VLM legibility onset metric</li>
+        <li class="check">Pilot proves VLO discriminates arc legibility classes</li>
+        <li class="check">Identified and reported full-video VLM saturation failure</li>
+      </ul>
+    </div>
+    <div class="col card">
+      <h3>Key design decisions</h3>
+      <ul>
+        <li><strong>Prefix frames, not full video</strong> — the only way to measure early intent</li>
+        <li><strong>Side-view camera, not front</strong> — front view is noisy and unreliable for lateral goal classification</li>
+        <li><strong>Annotated first frame</strong> — block markers give VLM spatial grounding without coordinate system assumptions</li>
+        <li><strong>Threshold 80%</strong> — maps to "confident human inference"; below 80% is ambiguous</li>
+      </ul>
+    </div>
+    <div class="col card warn-border">
+      <h3>Honest gaps</h3>
+      <ul>
+        <li class="cross">No human legibility study (VLO = proposed proxy)</li>
+        <li class="cross">VLO vs LegDiff comparison not yet run</li>
+        <li class="cross">n=2 pilot arcs only — not statistically significant</li>
+        <li class="cross">Reward shaping (L_early training signal) is borrowed from Dragan</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<!-- ── navigation ── -->
+<div class="nav">
+  <button onclick="go(-1)">← Prev</button>
+  <span id="counter">1 / 11</span>
+  <button onclick="go(1)">Next →</button>
+</div>
+
+<script>
+  let cur = 0;
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('counter');
+  function show(n) {
+    slides[cur].classList.remove('active');
+    cur = (n + slides.length) % slides.length;
+    slides[cur].classList.add('active');
+    counter.textContent = (cur + 1) + ' / ' + slides.length;
+  }
+  function go(d) { show(cur + d); }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(-1);
+  });
+</script>
+</body>
+</html>

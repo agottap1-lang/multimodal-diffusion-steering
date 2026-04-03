@@ -1,0 +1,33 @@
+# ── TwoBlockPick Diffusion Policy Training Config — Combined Dataset ──
+# Uses demos_combined.npz (400 demos: 200 left + 200 right, with style labels)
+# Identical to train.yaml except demo_path — same hyperparams that gave 88-92%
+
+# Observation / Action
+obs_dim: 22          # ee_pos(3)+ee_quat(4)+grip(1)+Lpos(3)+Lquat(4)+Rpos(3)+Rquat(4)
+act_dim: 5           # dx, dy, dz, dyaw, grip
+
+# Horizons
+horizon: 32
+n_action_steps: 8
+
+# Diffusion
+n_diffusion_steps: 100
+beta_start: 0.0001
+beta_end: 0.1
+
+# Model
+hidden_dim: 256
+n_blocks: 3
+time_embed_dim: 128
+
+# Training
+batch_size: 64
+lr: 2.0e-4
+weight_decay: 1.0e-5
+
+# Evaluation
+eval_execute_steps: 8
+
+# Paths
+demo_path: data/demos/demos_combined.npz
+ckpt_dir: runs

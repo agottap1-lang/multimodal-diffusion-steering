@@ -72,6 +72,9 @@ class TwoBlockPickEnv:
         episode_length: int = 200,
         dt: float = 1.0 / 240.0,
         cube_jitter: float | None = None,
+        cube_half: float | None = None,
+        cube_mass: float = 0.05,
+        cube_lateral_friction: float = 1.5,
     ) -> None:
         self._renders = render
         self._action_scale_pos = action_scale_pos
@@ -79,6 +82,10 @@ class TwoBlockPickEnv:
         self._episode_length = episode_length
         self._dt = dt
         self._cube_jitter = cube_jitter if cube_jitter is not None else _CUBE_JITTER
+        self._cube_half = cube_half if cube_half is not None else _CUBE_HALF
+        self._cube_z = _TABLE_TOP_Z + self._cube_half + 0.001
+        self._cube_mass = cube_mass
+        self._cube_lateral_friction = cube_lateral_friction
 
         # PyBullet connection
         mode = p.GUI if render else p.DIRECT
@@ -144,7 +151,8 @@ class TwoBlockPickEnv:
         self._episode_steps = 0
         self._picked_left = False
         self._picked_right = False
-        self._video_frames = []
+        if not self._video_path:  # don't wipe frames when recording is active
+            self._video_frames = []
         return self._get_obs()
 
     def step(self, action: np.ndarray) -> StepResult:
@@ -209,13 +217,13 @@ class TwoBlockPickEnv:
         ori = p.getQuaternionFromEuler([0, 0, 0])
         p.resetBasePositionAndOrientation(
             self._cube_l_uid,
-            [_CUBE_X + left_dx, _CUBE_Y + left_dy, _CUBE_Z], ori,
+            [_CUBE_X + left_dx, _CUBE_Y + left_dy, self._cube_z], ori,
             physicsClientId=self._cid)
         p.resetBaseVelocity(self._cube_l_uid, [0, 0, 0], [0, 0, 0],
                             physicsClientId=self._cid)
         p.resetBasePositionAndOrientation(
             self._cube_r_uid,
-            [_CUBE_X + right_dx, -_CUBE_Y + right_dy, _CUBE_Z], ori,
+            [_CUBE_X + right_dx, -_CUBE_Y + right_dy, self._cube_z], ori,
             physicsClientId=self._cid)
         p.resetBaseVelocity(self._cube_r_uid, [0, 0, 0], [0, 0, 0],
                             physicsClientId=self._cid)
@@ -275,24 +283,24 @@ class TwoBlockPickEnv:
 
     def _create_cube(self, rgba: list) -> int:
         cc = p.createCollisionShape(p.GEOM_BOX,
-                                    halfExtents=[_CUBE_HALF] * 3,
+                                    halfExtents=[self._cube_half] * 3,
                                     physicsClientId=self._cid)
         cv = p.createVisualShape(p.GEOM_BOX,
-                                 halfExtents=[_CUBE_HALF] * 3,
+                                 halfExtents=[self._cube_half] * 3,
                                  rgbaColor=rgba,
                                  physicsClientId=self._cid)
-        uid = p.createMultiBody(baseMass=0.05,
+        uid = p.createMultiBody(baseMass=self._cube_mass,
                                 baseCollisionShapeIndex=cc,
                                 baseVisualShapeIndex=cv,
-                                basePosition=[_CUBE_X, 0, _CUBE_Z],
+                                basePosition=[_CUBE_X, 0, self._cube_z],
                                 physicsClientId=self._cid)
         return uid
 
     def _set_cube_friction(self, uid: int) -> None:
         p.changeDynamics(uid, -1,
-                         lateralFriction=1.5,
-                         spinningFriction=0.01,
-                         rollingFriction=0.01,
+                         lateralFriction=self._cube_lateral_friction,
+                         spinningFriction=0.001,
+                         rollingFriction=0.001,
                          physicsClientId=self._cid)
 
     # ── reset helpers ────────────────────────────────────────────────
@@ -335,13 +343,13 @@ class TwoBlockPickEnv:
         ori = p.getQuaternionFromEuler([0, 0, 0])
         p.resetBasePositionAndOrientation(
             self._cube_l_uid,
-            [_CUBE_X + jlx, _CUBE_Y + jl, _CUBE_Z], ori,
+            [_CUBE_X + jlx, _CUBE_Y + jl, self._cube_z], ori,
             physicsClientId=self._cid)
         p.resetBaseVelocity(self._cube_l_uid, [0, 0, 0], [0, 0, 0],
                             physicsClientId=self._cid)
         p.resetBasePositionAndOrientation(
             self._cube_r_uid,
-            [_CUBE_X + jrx, -_CUBE_Y + jr, _CUBE_Z], ori,
+            [_CUBE_X + jrx, -_CUBE_Y + jr, self._cube_z], ori,
             physicsClientId=self._cid)
         p.resetBaseVelocity(self._cube_r_uid, [0, 0, 0], [0, 0, 0],
                             physicsClientId=self._cid)

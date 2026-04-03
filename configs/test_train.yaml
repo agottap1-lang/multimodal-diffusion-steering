@@ -1,0 +1,19 @@
+# Tiny config for smoke testing
+obs_dim: 22
+act_dim: 5
+horizon: 16
+n_action_steps: 8
+n_diffusion_steps: 10
+beta_start: 0.0001
+beta_end: 0.02
+hidden_dim: 64
+n_blocks: 2
+time_embed_dim: 32
+batch_size: 4
+lr: 1.0e-4
+weight_decay: 1.0e-6
+epochs: 3
+grad_clip: 1.0
+seed: 42
+demo_path: data/demos/test_demos.npz
+ckpt_dir: runs
