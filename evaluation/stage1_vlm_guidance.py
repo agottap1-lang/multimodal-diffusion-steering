@@ -9,7 +9,7 @@ This script implements the complete Stage 1 pipeline:
    function (Eureka-style code synthesis).
 2. **Validate** the generated code: syntax, gradient flow, output range.
 3. **Unit test** on known trajectories.
-4. **Plug into LPSDDIMSampler** and run evaluation.
+4. **Plug into GuidedDDIMSampler** and run evaluation.
 5. **Compare** against hand-crafted L_early_intent baseline.
 
 Usage
@@ -49,7 +49,7 @@ from envs.twoblockpick_env import TwoBlockPickEnv
 from evaluation.eval_legibility_guided import (
     DDIMSampler,
     DiffusionPolicy,
-    LPSDDIMSampler,
+    GuidedDDIMSampler,
     l_early_intent_torch,
 )
 
@@ -308,7 +308,7 @@ def validate_generated_code(code: str, device: torch.device) -> Tuple[bool, str,
 class VLMGuidedDDIMSampler:
     """DDIM with VLM-generated guidance function.
 
-    Same as LPSDDIMSampler but uses the VLM-generated scoring function
+    Same as GuidedDDIMSampler but uses the VLM-generated scoring function
     instead of l_early_intent_torch.
     """
 
@@ -493,7 +493,7 @@ def main():
     ap.add_argument('--skip_baseline', action='store_true',
                     help='Skip baseline evaluation')
     ap.add_argument('--skip_handcrafted', action='store_true',
-                    help='Skip hand-crafted LPS evaluation')
+                    help='Skip hand-crafted classifier guidance evaluation')
     args = ap.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -648,15 +648,15 @@ def main():
               f"L_early={np.mean(bl_l):.4f} ± {np.std(bl_l):.4f}")
         all_results['baseline'] = baseline_results
 
-    # 4b: Hand-crafted LPS
+    # 4b: Hand-crafted classifier guidance
     if not args.skip_handcrafted:
-        lps_sampler = LPSDDIMSampler(n_diff, beta_s, beta_e, device,
+        guided_sampler = GuidedDDIMSampler(n_diff, beta_s, beta_e, device,
                                      guidance_scale=args.guidance_scale,
                                      grad_clip=args.grad_clip)
-        print(f"\n── HAND-CRAFTED LPS (w={args.guidance_scale}) ── {args.n_episodes} episodes ──")
+        print(f"\n── HAND-CRAFTED GUIDANCE (w={args.guidance_scale}) ── {args.n_episodes} episodes ──")
         handcrafted_results = []
         for ep in range(args.n_episodes):
-            r = run_episode(model, lps_sampler,
+            r = run_episode(model, guided_sampler,
                             obs_mean, obs_std, act_mean, act_std, device,
                             guided=True,
                             n_sampling_steps=args.n_sampling_steps,
@@ -672,7 +672,7 @@ def main():
         hc_s = [r['success'] for r in handcrafted_results]
         print(f"\n  HAND-CRAFTED: success={np.mean(hc_s):.1%}  "
               f"L_early={np.mean(hc_l):.4f} ± {np.std(hc_l):.4f}")
-        all_results['handcrafted_lps'] = handcrafted_results
+        all_results['handcrafted_guidance'] = handcrafted_results
 
     # 4c: VLM-generated guidance
     vlm_sampler = VLMGuidedDDIMSampler(n_diff, beta_s, beta_e, device,
@@ -720,8 +720,8 @@ def main():
         delta = vl - bl
         print(f"\n  VLM vs Baseline: Δ L_early = {delta:+.4f} ({delta/max(bl,1e-6)*100:+.1f}%)")
 
-    if 'handcrafted_lps' in all_results and 'vlm_guided' in all_results:
-        hc = np.mean([r['l_early_actual'] for r in all_results['handcrafted_lps']])
+    if 'handcrafted_guidance' in all_results and 'vlm_guided' in all_results:
+        hc = np.mean([r['l_early_actual'] for r in all_results['handcrafted_guidance']])
         vl = np.mean([r['l_early_actual'] for r in all_results['vlm_guided']])
         delta = vl - hc
         print(f"  VLM vs Hand-crafted: Δ L_early = {delta:+.4f} ({delta/max(hc,1e-6)*100:+.1f}%)")

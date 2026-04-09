@@ -42,7 +42,7 @@ from envs.twoblockpick_env import TwoBlockPickEnv
 from evaluation.eval_legibility_guided import (
     DiffusionPolicy,
     DDIMSampler,
-    LPSDDIMSampler,
+    GuidedDDIMSampler,
     l_early_intent_torch,
     ACTION_SCALE,
     OBS_EE_POS,
@@ -423,7 +423,7 @@ def main():
     print("="*65)
     print("  If 4-criteria HC ≈ VLM 4-criteria, VLM added nothing.")
 
-    sampler_1c = LPSDDIMSampler(n_diff, b_s, b_e, device,
+    sampler_1c = GuidedDDIMSampler(n_diff, b_s, b_e, device,
                                  guidance_scale=args.guidance_scale, grad_clip=1.0)
     sampler_4c = HandcraftedGuidedSampler(n_diff, b_s, b_e, device,
                                            guidance_scale=args.guidance_scale, grad_clip=1.0)

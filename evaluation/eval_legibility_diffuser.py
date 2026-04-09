@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate Legibility Diffuser (Bronars et al. RA-L 2024) vs LPS vs Baseline.
+"""Evaluate Legibility Diffuser (Bronars et al. RA-L 2024) vs Classifier Guidance vs Baseline.
 
 Loads:
   --checkpoint        : trained GoalCondDiffusionPolicy (from train_legibility_diffuser.py)
@@ -7,7 +7,7 @@ Loads:
 
 Three conditions compared:
   1. Baseline   — unconditioned UNet DDIM  (cube_jitter=0.0, 10 steps)
-  2. LPS        — DPS gradient guidance on baseline model (from eval_legibility_guided.py)
+  2. ClassGuid  — Classifier guidance on baseline model (from eval_legibility_guided.py)
   3. LegDiff    — Legibility Diffuser CFG (ε̂ = ε_uncond + w*(ε_cond − ε_uncond))
 
 Goal detection (LegDiff):

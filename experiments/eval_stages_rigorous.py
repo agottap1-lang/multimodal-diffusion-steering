@@ -12,7 +12,7 @@ Scientific evaluation pipeline with:
 - **Gradient diagnostics**: Verify gradient structure
 
 Stage 1: VLM code synthesis — can Gemini produce a valid, discriminative scoring function?
-Stage 2: DPS integration — does the VLM function improve legibility under gradient guidance?
+Stage 2: Classifier guidance integration — does the VLM function improve legibility under gradient guidance?
 Stage 3: VLM text reranking — does post-hoc selection further improve?
 
 Usage:
@@ -42,7 +42,7 @@ from envs.twoblockpick_env import TwoBlockPickEnv
 from evaluation.eval_legibility_guided import (
     DDIMSampler,
     DiffusionPolicy,
-    LPSDDIMSampler,
+    GuidedDDIMSampler,
     l_early_intent_torch,
 )
 
@@ -382,7 +382,7 @@ def stage1_compare_to_handcrafted(vlm_fn: Callable, device: torch.device) -> dic
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# STAGE 2: DPS INTEGRATION — PAIRED EVALUATION + SWEEP
+# STAGE 2: CLASSIFIER GUIDANCE INTEGRATION — PAIRED EVALUATION + SWEEP
 # ═════════════════════════════════════════════════════════════════════════
 
 def stage2_paired_eval(
@@ -484,7 +484,7 @@ def stage3_rerank_candidates(
     """Generate N candidate trajectories, rerank with VLM text analysis.
 
     For each candidate:
-    1. Run guided DPS sampling to get action chunk
+    1. Run guided classifier-guidance sampling to get action chunk
     2. Forward-simulate to get EE trajectory prefix
     3. Compute trajectory statistics (arc, velocity, L_early)
     4. VLM selects best candidate based on text description
@@ -842,17 +842,17 @@ def main():
         print(f"\n  Stage 1 results → {s1_path}")
 
     # ═════════════════════════════════════════════════════════════════
-    # STAGE 2: DPS Integration — Paired Evaluation + Scale Sweep
+    # STAGE 2: Classifier Guidance Integration — Paired Evaluation + Scale Sweep
     # ═════════════════════════════════════════════════════════════════
     if args.stage == '2' or run_all:
         print(f"\n{'='*72}")
-        print("  STAGE 2: DPS Integration — Does gradient guidance with")
+        print("  STAGE 2: Classifier Guidance Integration — Does gradient guidance with")
         print("           VLM function improve legibility?")
         print(f"{'='*72}")
         print("  H_S2: At the optimal guidance scale w*:")
-        print("    (a) VLM-guided DPS success ≥ 95% (no degradation)")
+        print("    (a) VLM-guided classifier guidance success ≥ 95% (no degradation)")
         print("    (b) VLM-guided L_early > baseline L_early (p < 0.05)")
-        print("    (c) VLM-guided L_early ≈ hand-crafted LPS L_early")
+        print("    (c) VLM-guided L_early ≈ hand-crafted classifier guidance L_early")
         print("    (d) Optimal w* for VLM function may differ from hand-crafted")
 
         vlm_fn_path = Path(args.vlm_fn_path)
@@ -864,7 +864,7 @@ def main():
             seed_pairs, n_sampling_steps=args.n_sampling_steps,
             n_diff=n_diff, beta_s=beta_s, beta_e=beta_e)
 
-        # 2b. Hand-crafted LPS sweep
+        # 2b. Hand-crafted classifier guidance sweep
         hc_scales = [5.0, 10.0, 15.0]
         hc_results = stage2_paired_eval(
             model, obs_mean, obs_std, act_mean, act_std, device,
@@ -982,7 +982,7 @@ def main():
         print(f"{'='*72}")
         print("  H_S3: Best-of-N with VLM reranking will:")
         print("    (a) Maintain ≥ 95% success rate")
-        print("    (b) Improve L_early by +1-3% over single-sample DPS")
+        print("    (b) Improve L_early by +1-3% over single-sample guidance")
         print("    (c) VLM reranking ≈ oracle L_early selection (r > 0.8)")
 
         vlm_fn_path = Path(args.vlm_fn_path)
@@ -1011,8 +1011,8 @@ def main():
             n_diff, beta_s, beta_e, device,
             score_fn=vlm_fn, guidance_scale=best_w, grad_clip=1.0)
 
-        # 3a. Single-sample DPS (N=1, same seeds)
-        print(f"\n  ── DPS single-sample (N=1, w={best_w}) ──")
+        # 3a. Single-sample guided (N=1, same seeds)
+        print(f"\n  ── Guided single-sample (N=1, w={best_w}) ──")
         single_results = []
         for ep_idx, (es, ss) in enumerate(seed_pairs):
             r = run_paired_episode(
@@ -1067,7 +1067,7 @@ def main():
 
         print(f"\n  {'Method':<35} {'Success':>8} {'L_early':>10} {'std':>8}")
         print(f"  {'-'*65}")
-        print(f"  {'DPS single-sample (N=1)':<35} {np.mean(single_s):>7.0%} "
+        print(f"  {'Guided single-sample (N=1)':<35} {np.mean(single_s):>7.0%} "
               f"{np.mean(single_l):>10.4f} {np.std(single_l):>8.4f}")
         print(f"  {'Oracle reranking (N=' + str(args.n_candidates) + ')':<35} "
               f"{np.mean(oracle_s):>7.0%} "

@@ -242,7 +242,7 @@ class LegibilityScorer:
             final_goal = 'A' if full_result['pA'] > full_result['pB'] else 'B'
             
             # Weighted legibility score (early clarity weighted higher)
-            legibility_score = early_weight * early_conf + (1 - early_weight) * final_conf
+            dlegibility_score = early_weight * early_conf + (1 - early_weight) * final_conf
             
             # Check consistency (same goal at 30% and 100%?)
             consistent = (early_goal == final_goal)

@@ -60,7 +60,7 @@ from gemini_vlm_eval.schema import ManifestEntry
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-VLM_MODEL = "gemini-2.5-flash"
+VLM_MODEL = "gemini-2.5-flash-preview-05-20"
 GOAL_A_DESC = "pick the left block"
 GOAL_B_DESC = "pick the right block"
 FRAME_STEPS = {0: 0, 30: 1, 60: 2, 90: 3, 120: 4, 149: 5}  # step→t_sec

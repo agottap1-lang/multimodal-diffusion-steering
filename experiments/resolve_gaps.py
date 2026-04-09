@@ -41,7 +41,7 @@ from envs.twoblockpick_env import TwoBlockPickEnv
 from evaluation.eval_legibility_guided import (
     DDIMSampler,
     DiffusionPolicy,
-    LPSDDIMSampler,
+    GuidedDDIMSampler,
     l_early_intent_torch,
 )
 

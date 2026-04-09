@@ -39,5 +39,5 @@ eval_ddim_steps: null  # null = use all n_diffusion_steps; set to 20-50 for stri
 eval_temporal_ensemble: true  # average overlapping action chunks (smoother but may over-smooth)
 
 # Paths
-demo_path: data/demos/demos.npz
+demo_path: data/demos/demos_all.npz
 ckpt_dir: runs

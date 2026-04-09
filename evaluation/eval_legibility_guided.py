@@ -3,17 +3,10 @@
 Training-Free Classifier Guidance for Legible Diffusion Policy
 ===============================================================
 
-NOTE: Despite legacy variable names (LPS*), this implements classifier
-guidance (Dhariwal & Nichol 2021), NOT Diffusion Posterior Sampling.
-True DPS was tested and has 0% success rate at practical scales.
+Method: Classifier Guidance (Dhariwal & Nichol, NeurIPS 2021)
 
-Training-free legibility guidance at inference time.
-
-The key idea
-------------
-Instead of Best-of-N (sample N trajectories, pick best), we inject
-a legibility gradient into *every* DDIM denoising step. This follows
-Diffusion Posterior Sampling (DPS; Chung et al., ICLR 2023):
+At each DDIM denoising step, inject a legibility gradient into the
+noise prediction:
 
     Îµ_guided = Îµ_Î¸(x_t) âˆ’ w Â· âˆš(1âˆ’Î±_t) Â· âˆ‡_{x_t} L_early(xÌ‚â‚€(x_t))
 
@@ -22,40 +15,26 @@ Bayesian goal-inference legibility score from Dragan et al. (HRI 2013).
 
 Why this is better than Best-of-N
 -----------------------------------
-- Best-of-N: O(N) inference cost, still random â€” if the policy rarely
-  produces legible arcs in N tries, you get nothing.
-- LPS: O(1) inference cost â€” every sample is pushed toward legibility
-  via the gradient. Works even if the baseline rarely produces legible
-  trajectories.
+- Best-of-N: O(N) inference cost, still random.
+- Classifier guidance: O(1) inference cost — every sample is pushed
+  toward legibility via the gradient.
 
 Why this is better than Legibility Diffuser (Bronars et al. RA-L 2024)
 ------------------------------------------------------------------------
-- Bronars: requires a separately-trained guided policy (offline imitation
-  of legible demonstration modes).
-- LPS: zero retraining â€” works on any existing diffusion policy
+- Bronars: requires a separately-trained guided policy.
+- Classifier guidance: zero retraining — works on any diffusion policy
   checkpoint. The guidance is injected purely at inference.
-
-Novel contribution over DPS (Chung et al. 2022)
--------------------------------------------------
-DPS was designed for image restoration (linear/nonlinear inverse
-problems). We adapt it to robot trajectory legibility:
-  - guidance potential = L_early_intent (Dragan 2013 Bayesian posterior,
-    information-theoretic, not just pixel likelihood)
-  - xÌ‚â‚€ is a *action* sequence, converted to EE trajectory via delta
-    integration before computing the legibility gradient.
 
 References
 ----------
 [1] Dragan, Lee, Srinivasa. "Legibility and Predictability of Robot Motion."
     HRI 2013.
-[2] Chung, Kim, McCann, Klasky, Ye. "Diffusion Posterior Sampling for
-    General Noisy Inverse Problems." ICLR 2023. arXiv:2209.14687
+[2] Dhariwal, Nichol. "Diffusion Models Beat GANs on Image Synthesis."
+    NeurIPS 2021. (Classifier guidance â the method we actually use)
 [3] Bronars, Cheng, Xu. "Legibility Diffuser: Offline Imitation for
     Intent Expressive Motion." RA-L 2024.
 [4] Shi, Grislain, Sigaud, Chetouani. "Controlling Intent Expressiveness
     in Robot Motion with Diffusion Models." arXiv:2510.12370, 2025.
-[5] Dhariwal, Nichol. "Diffusion Models Beat GANs on Image Synthesis."
-    NeurIPS 2021. (Classifier guidance â€” the special-case parent of DPS)
 
 Usage
 -----
@@ -274,7 +253,7 @@ class DDIMSampler:
 # CLASSIFIER-GUIDED DDIM SAMPLER  (gradient injected at every step)
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-class LPSDDIMSampler:
+class GuidedDDIMSampler:
     """DDIM with classifier-guidance gradient injection at every denoising step.
 
     At step t:
@@ -329,7 +308,7 @@ class LPSDDIMSampler:
             sqrt_ab = torch.sqrt(alpha_t)
             sqrt_1m_ab = torch.sqrt(1.0 - alpha_t)
 
-            # â”€â”€ LPS gradient â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # â”€â”€ Classifier guidance gradient â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             x_in = x.detach().requires_grad_(True)
             with torch.enable_grad():
                 eps_pred = model(x_in, t_batch, obs)
@@ -476,7 +455,7 @@ def main():
     ap.add_argument('--guidance_scale', type=float, default=2.0,
                     help='Guidance strength w (0=baseline, ~2=recommended)')
     ap.add_argument('--grad_clip', type=float, default=1.0,
-                    help='Gradient norm clip for LPS stability')
+                    help='Gradient norm clip for guidance stability')
     ap.add_argument('--n_sampling_steps', type=int, default=10,
                     help='DDIM steps (default 10, matches eval_with_videos.py)')
     ap.add_argument('--cube_jitter', type=float, default=0.0,
@@ -555,15 +534,15 @@ def main():
             bar  = '#' * int(frac * 30)
             print(f"    â‰¥{thr:.2f}: [{bar:<30}] {frac:.0%}")
 
-    # â”€â”€ 2. Guided â”€â”€ (LPSDDIMSampler)
+    # ââ 2. Guided ââ (GuidedDDIMSampler)
     guided_results = []
     if not args.baseline_only:
-        lps_sampler = LPSDDIMSampler(n_diff, beta_s, beta_e, device,
-                                     guidance_scale=args.guidance_scale,
-                                     grad_clip=args.grad_clip)
-        print(f"\nâ”€â”€ GUIDED (LPS, w={args.guidance_scale}) â”€â”€ {args.n_episodes} episodes â”€â”€")
+        guided_sampler = GuidedDDIMSampler(n_diff, beta_s, beta_e, device,
+                                           guidance_scale=args.guidance_scale,
+                                           grad_clip=args.grad_clip)
+        print(f"\nââ GUIDED (classifier guidance, w={args.guidance_scale}) ââ {args.n_episodes} episodes ââ")
         for ep in range(args.n_episodes):
-            r = run_episode(model, lps_sampler,
+            r = run_episode(model, guided_sampler,
                             obs_mean, obs_std, act_mean, act_std, device,
                             guided=True,
                             n_sampling_steps=args.n_sampling_steps,
@@ -588,12 +567,12 @@ def main():
         gd = np.mean([r['l_early_actual'] for r in guided_results])
         delta = gd - bl
         print(f"\n{'='*65}")
-        print(f"  LEGIBILITY IMPROVEMENT (LPS over baseline)")
+        print(f"  LEGIBILITY IMPROVEMENT (classifier guidance over baseline)")
         print(f"{'='*65}")
         print(f"  Baseline L_early  : {bl:.4f}")
-        print(f"  Guided   L_early  : {gd:.4f}  Î”={delta:+.4f}  ({delta/max(bl,1e-6)*100:+.1f}%)")
-        print(f"  Success â€” Baseline: {np.mean([r['success'] for r in baseline_results]):.1%}  "
-              f"LPS: {np.mean([r['success'] for r in guided_results]):.1%}")
+        print(f"  Guided   L_early  : {gd:.4f}  \u0394={delta:+.4f}  ({delta/max(bl,1e-6)*100:+.1f}%)")
+        print(f"  Success \u2014 Baseline: {np.mean([r['success'] for r in baseline_results]):.1%}  "
+              f"Guided: {np.mean([r['success'] for r in guided_results]):.1%}")
 
     # â”€â”€ 4. Save â”€â”€
     out_dir = Path(__file__).parent.parent / 'outputs'
@@ -613,7 +592,7 @@ def main():
         'baseline': [{k: _s(v) for k, v in r.items()} for r in baseline_results],
         'guided':   [{k: _s(v) for k, v in r.items()} for r in guided_results],
     }
-    out_path = out_dir / 'lps_results.json'
+    out_path = out_dir / 'classifier_guidance_results.json'
     with open(out_path, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\nResults saved â†’ {out_path}")
