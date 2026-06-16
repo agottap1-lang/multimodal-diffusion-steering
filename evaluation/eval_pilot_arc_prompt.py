@@ -14,7 +14,8 @@ from gemini_vlm_eval.client import GeminiClient
 from gemini_vlm_eval.schema import ManifestEntry
 from gemini_vlm_eval.video import extract_and_cache_frames
 
-os.environ.setdefault("GEMINI_API_KEY", "AIzaSyCr6BUwJtyNOhP3Fm8iUGeBQbBQPEnFIEQ")
+if not os.environ.get("GEMINI_API_KEY"):
+    raise SystemExit("Set GEMINI_API_KEY in your environment / .env before running.")
 
 MANIFEST_PATH = Path("data/manifest_combined_cfg00.jsonl")
 VIDEO_ROOT    = Path("data/demos/demo_videos_combined")

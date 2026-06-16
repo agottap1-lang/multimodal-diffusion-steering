@@ -36,7 +36,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 **Current .env content:**
 ```dotenv
-GEMINI_API_KEY=AIzaSyBzSIE4Boa14_k55FhdzXQRz7zgg1JqQ-Q
+GEMINI_API_KEY=AIza...REDACTED...
 ```
 
 ⚠️ **ISSUE**: This API key has been leaked and revoked by Google.
@@ -253,7 +253,7 @@ for entry in entries:
 
 The API key in `gemini_vlm_eval/.env` is:
 ```
-AIzaSyBzSIE4Boa14_k55FhdzXQRz7zgg1JqQ-Q
+AIza...REDACTED...
 ```
 
 This key has been exposed publicly and Google has revoked it.

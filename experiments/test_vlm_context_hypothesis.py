@@ -21,7 +21,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
 
-GEMINI_API_KEY = "AIzaSyC49xYA6yGPLCQ0Ma-sFIIXYs-pfp38f0g"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")  # set in .env — never hardcode
 GEMINI_MODEL = "gemini-3-pro-preview"
 
 GOAL_A_DESC = "pick the LEFT (green) block"

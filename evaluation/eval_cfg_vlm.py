@@ -39,7 +39,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # ── API Key ───────────────────────────────────────────────────────────
-GEMINI_API_KEY = "AIzaSyC49xYA6yGPLCQ0Ma-sFIIXYs-pfp38f0g"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")  # set in .env — never hardcode
 GEMINI_MODEL   = "gemini-3-pro-preview"
 
 # ── Constants ─────────────────────────────────────────────────────────
