@@ -9,7 +9,7 @@ A **behavior-conditioned diffusion policy** for robot pick-and-place that can be
 > 🎓 This is the diffusion-policy half of my MS thesis, *Vision-Language Models as Proxies for Human Judgment of Robot Motion Legibility* (ASU, 2026). The VLM goal-inference benchmark lives in the companion repo **[gemini-vlm-goal-inference](https://github.com/agottap1-lang/gemini-vlm-goal-inference)**.
 
 <p align="center">
-  <img src="figures/fig7_system_overview.png" alt="System overview: diffusion policy + CFG + VLM reranking" width="88%">
+  <img src="figures/fig_vlm_pipeline.png" alt="VLM-based candidate trajectory ranking pipeline" width="92%">
 </p>
 
 ---
