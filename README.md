@@ -1,169 +1,162 @@
+# Steering Diffusion Policies for Legible Robot Manipulation — CFG + VLM Reranking
 
-# Multimodal Diffusion Policy: TwoBlockPick
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![Sim](https://img.shields.io/badge/sim-PyBullet-orange.svg)](https://pybullet.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Overview
+A **behavior-conditioned diffusion policy** for robot pick-and-place that can be **steered at inference time — without retraining** — to produce trajectories that are more *legible, predictable, safe, or grounded*. Steering is done two ways: **Classifier-Free Guidance (CFG)** and **VLM best-of-N reranking**, where a vision-language model (Gemini / GPT / Claude) scores candidate trajectories and the best is executed. Franka Panda + PyBullet; full data → train → steer → evaluate pipeline with statistically validated results.
 
-This project implements a state-of-the-art unconditional diffusion policy for robotic pick-and-place, trained on a perfectly balanced dataset of left-pick and right-pick demonstrations. Multimodality emerges from stochastic diffusion sampling: the same initial state, with different noise seeds, leads the robot to pick either the left or right block.
+> 🎓 This is the diffusion-policy half of my MS thesis, *Vision-Language Models as Proxies for Human Judgment of Robot Motion Legibility* (ASU, 2026). The VLM goal-inference benchmark lives in the companion repo **[gemini-vlm-goal-inference](https://github.com/agottap1-lang/gemini-vlm-goal-inference)**.
 
-**Key Features:**
-- PyBullet-based simulation with a 7-DOF Panda arm and two cubes
-- 400 high-quality demonstrations (10 configs × 20 arcs × 2 modes)
-- Rigorous compositional train/test splits for generalization
-- Full pipeline: data collection → training → evaluation → analysis
-- Multimodality proof protocol and robust diagnostics
-
----
-
-## Motivation
-
-Robotic policies must generalize and exhibit multimodal behavior in ambiguous scenarios. This project demonstrates that diffusion models, when properly trained and evaluated, can learn to stochastically select between distinct strategies (left/right pick) without explicit conditioning.
+<p align="center">
+  <img src="figures/fig7_system_overview.png" alt="System overview: diffusion policy + CFG + VLM reranking" width="88%">
+</p>
 
 ---
 
-## Pipeline Quickstart
+## Why this matters
+Robots that share space with people must not only *succeed* at a task but also **communicate their intent** through motion. A diffusion policy naturally generates *many* valid ways to do the same task — so instead of retraining for each desired behavior, this project **selects and steers** among those candidates at inference time using a VLM as an observer-style critic.
 
-```powershell
-# 1. Environment setup
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install --upgrade pip
+## Highlights
+- **Behavior-conditioned diffusion policy** (DDPM U-Net, 8.8M params) trained on 500 demos across 4 behavior styles.
+- **Two inference-time steering knobs, no retraining:** CFG (guidance scale λ) and **VLM best-of-N** trajectory reranking.
+- **VLM-as-critic:** renders candidate rollouts to frames, queries a VLM with a behavior-specific prompt, executes the highest-scoring candidate.
+- **Rigorous evaluation:** compositional train/test splits, paired baselines, statistical tests, and behavior-specific metrics (legibility, path efficiency, clearance, grounding).
+- **Reproducible:** unified CLI, YAML configs, seeded runs, checkpoints bundling normalization stats.
+
+---
+
+## Results
+
+**Inference-time steering improves behavior without hurting task success.** Across 4 behaviors (10 episodes each):
+
+| Behavior | CFG-only success | Key metric (CFG) | + VLM best-of-N |
+|---|:--:|---|:--:|
+| **Legibility** | 10/10 | L_early = 0.900 ± 0.017 | **100% vs 40% random — 6× gain** |
+| Safety | 10/10 | min clearance, **0 collisions** | success 7/10, clearance +0.43 vs random |
+| Grounding | 9/10 | waypoint hover 0.079 ± 0.033 | +0.39 vs random |
+| Predictability | 9/10 | path efficiency 0.424 ± 0.025 | weak (straight paths look alike) |
+
+**Full 3-stage pipeline (20 paired episodes):**
+
+| Stage | Success | Legibility (L_early) |
+|---|:--:|:--:|
+| Baseline (no steering) | 80% | 0.898 |
+| + CFG guidance | 100% | 0.948 |
+| + VLM reranking | 100% | **0.972** |
+
+➡️ **Headline finding:** the VLM critic is **most valuable for legibility** — it reliably picks the trajectory that curves decisively toward the intended block, a **6× improvement over random candidate selection** and **+7.4 pp** L_early end-to-end (p < 0.0001). For behaviors where candidates look visually similar (predictability), reranking adds little — a finding I report honestly rather than hide.
+
+<p align="center">
+  <img src="figures/fig5_final_results.png" alt="Final results across behaviors" width="80%">
+  <img src="figures/vlm_table1_main_results.png" alt="Main results table" width="80%">
+</p>
+
+---
+
+## How steering works
+
+<p align="center">
+  <img src="figures/ppt4_inference_scoring.png" alt="VLM best-of-N reranking pipeline" width="82%">
+</p>
+
+**1. Classifier-Free Guidance (CFG).** The policy is trained with 15% condition dropout so it learns both conditional and unconditional scores. At inference the denoising direction is pushed toward the target behavior:
+
+$$\tilde{\epsilon} = \epsilon_\theta(\mathbf{x}_t, t, \varnothing) + \lambda\,\big(\epsilon_\theta(\mathbf{x}_t, t, \mathbf{c}) - \epsilon_\theta(\mathbf{x}_t, t, \varnothing)\big)$$
+
+Sampled with DDIM (η = 0.3) to stay stable while preserving the policy's multimodality.
+
+**2. VLM best-of-N reranking.** Generate N candidate trajectories with different seeds → render key frames → ask a VLM to score each against a behavior-specific rubric → execute the top-scored candidate. The VLM scoring rubric was validated against a hand-crafted metric (r = 0.992).
+
+The two mechanisms are **complementary**: CFG shapes the *distribution* of candidates; reranking *selects* the best realization within it.
+
+---
+
+## Quickstart
+
+```bash
+python -m venv .venv && .\.venv\Scripts\Activate.ps1   # Windows
 pip install -r requirements.txt
 
-# 2. Full pipeline (collect → train → eval)
-.\run_all.ps1
+python cli.py list                                     # show CLI commands
+python cli.py quick-eval --episodes 3                  # smoke test
+python cli.py evaluate-paired --episodes 10            # CFG vs baseline
+python cli.py generate-videos --n-videos 5             # rollout videos
 ```
 
-### Manual Steps
+<details>
+<summary><b>Full pipeline (collect → train → evaluate)</b></summary>
 
-```powershell
-# Collect demonstrations (100 left + 100 right)
-python scripts/collect_demos_twoblockpick.py --episodes_left 100 --episodes_right 100
+```bash
+# 1. Collect demonstrations (4 behavior styles)
+python scripts/collect_demos_cfg.py --n 500
+# 2. Train behavior-conditioned diffusion policy (CFG, 200 epochs)
+python scripts/train_cfg.py --config configs/train_combined.yaml
+# 3. Evaluate CFG steering across behaviors
+python evaluation/eval_cfg.py --ckpt runs/cfg_20260406_005407/ckpt_ep200.pt
+# 4. Evaluate CFG + VLM best-of-N reranking
+python evaluation/eval_cfg_vlm.py --ckpt runs/cfg_20260406_005407/ckpt_ep200.pt --n-candidates 4
+```
+The VLM key is read from the environment / `.env` (`GEMINI_API_KEY`) — never hardcoded.
+</details>
 
-# Inspect demo quality and balance
-python scripts/inspect_demos.py --path data/demos/demos.npz
+---
 
-# Train diffusion policy (default: 500 epochs)
-python scripts/train_diffusion_policy.py --config configs/train.yaml
+## Method & data details
 
-# Evaluate multimodality (10 env seeds × 20 sample seeds)
-python scripts/eval_multimodality.py --ckpt runs/latest/ckpt.pt --K 10 --M 20
+<details>
+<summary><b>Model & training configuration</b></summary>
 
-# (Optional) Train + evaluate BC baseline
-python scripts/train_bc.py --config configs/train.yaml
-python scripts/eval_bc.py  --ckpt runs/bc_latest/bc_ckpt.pt --K 10 --M 5
+| Parameter | Value |
+|---|---|
+| Architecture | DDPM 1-D U-Net (8.8M params), 6 ResBlocks, 256 hidden, FiLM time embedding |
+| Obs / action dim | 26 (22 obs + 4 behavior one-hot) / 5 (Δx, Δy, Δz, Δyaw, gripper) |
+| Horizon | 32 (predict 32, execute 8), closed-loop replanning |
+| Diffusion | 100 steps, linear β 1e-4→0.1; DDIM η = 0.3 at inference |
+| Training | 200–500 epochs, batch 256, AdamW 1e-4, EMA 0.999, CFG dropout 0.15 |
+</details>
+
+<details>
+<summary><b>Task, behaviors & evaluation protocol</b></summary>
+
+- **Task — TwoBlockPick:** a Franka Panda must pick one of two blocks while expressing a target behavior.
+- **Behaviors:** *legibility* (curve toward target early), *predictability* (direct path), *safety* (clearance from the non-target / obstacle), *grounding* (pass through a task waypoint).
+- **Legibility metric (L_early):** Bayesian observer posterior over goals from a partial trajectory (higher = intent revealed earlier).
+- **Compositional splits:** held-out scene configs *and* held-out trajectory arcs to test generalization, not memorization.
+</details>
+
+<details>
+<summary><b>Known limitations (reported, not hidden)</b></summary>
+
+- VLM predictability scoring is weak — near-straight paths look identical to the model.
+- DDPM at eval amplifies actions → use DDIM (η = 0.3); `execute_steps=8` avoids OOD observations.
+- Re-execution variance: the VLM selects from simulated candidates, then re-executes; PyBullet stochasticity can cause small drift.
+- Simulation only; sim-to-real transfer of the legibility signal is future work.
+</details>
+
+---
+
+## Repository map
+```
+configs/        training configs (YAML)        envs/         PyBullet TwoBlockPick env
+scripts/        data collection + training     evaluation/   CFG / VLM / BC evaluators
+experiments/    rigorous staged evaluation     analysis/     legibility / arc / VLM analysis
+figures/        paper-ready figures            thesis_materials/  thesis figures & LaTeX
+cli.py          unified entry point            FINAL_RESULTS.md / THESIS_COMPARISON.md
 ```
 
----
+## Status
+The core method and evaluation were defended as my MS thesis (peer-reviewed). This repository is the **living codebase** and also contains **additional, in-development experiments** beyond the thesis scope — those are exploratory and still being validated.
 
-## Project Structure
-
-```
-├── configs/                  # Training configs (YAML)
-├── envs/                     # PyBullet environment
-├── scripts/                  # Data collection, training, evaluation
-├── data/demos/               # Saved demonstrations
-├── runs/                     # Training checkpoints
-├── outputs/                  # Evaluation results, videos, metrics
-├── run_all.ps1               # Full pipeline script
-├── requirements.txt
-└── README.md
+## Citation
+```bibtex
+@mastersthesis{gottapu2026vlmlegibility,
+  title  = {Vision-Language Models as Proxies for Human Judgment of Robot Motion Legibility},
+  author = {Gottapu, Anudeep Sai},
+  school = {Arizona State University},
+  year   = {2026}
+}
 ```
 
----
-
-## Data Format
-
-Demonstrations are stored in `data/demos/demos.npz`:
-
-| Key               | Shape         | Description                       |
-|-------------------|--------------|-----------------------------------|
-| `obs`             | (N, T, 22)   | Observations per timestep         |
-| `actions`         | (N, T, 5)    | Actions per timestep              |
-| `episode_lengths` | (N,)         | Valid length of each episode      |
-| `labels`          | (N,) str     | "left" / "right" (for eval)      |
-
-**Observation (22-d):**
-`ee_pos(3), ee_quat(4), gripper(1), left_cube_pos(3), left_cube_quat(4), right_cube_pos(3), right_cube_quat(4)`
-
-**Action (5-d):**
-`dx, dy, dz, delta_yaw, gripper` (all ∈ [-1, 1])
-
----
-
-## Training & Evaluation Configuration
-
-See [`configs/train.yaml`](configs/train.yaml) for all hyperparameters.
-
-| Parameter          | Value (default)                       |
-|--------------------|---------------------------------------|
-| Horizon            | 32 (predict 32, execute 8)            |
-| Diffusion steps    | 100 (linear β 0.0001→0.1)             |
-| Network            | 6 ResBlock MLP, 256 hidden, FiLM time |
-| Epochs             | 500                                   |
-| Batch size         | 256                                   |
-| Learning rate      | 1e-4, AdamW                           |
-| Action norm        | identity (actions ∈ [-1,1])           |
-| Obs norm           | per-dim mean/std, std floored at 0.01 |
-
----
-
-## Evaluation & Multimodality Protocol
-
-1. Fix **K** environment seeds (identical cube placement per seed)
-2. For each env seed, run **M** rollouts with different `sample_seed` (diffusion noise)
-3. Record outcome: `left_success` / `right_success` / `failure`
-4. Compute per-seed entropy over {left, right} among successes
-5. Flag `BIMODAL` if both left and right picks occur, `COLLAPSE` if >90% go to one side
-
-**Compositional Split:**
-- Train: Configs 0-6, Arcs 0-15 (224 demos)
-- Val: Config 7, Arcs 0-15 (32 demos)
-- Test-trajectory: Configs 0-7, Arcs 16-19 (64 demos)
-- Test-scene: Configs 8-9, Arcs 0-15 (64 demos)
-- Test-full: Configs 8-9, Arcs 16-19 (16 demos)
-
----
-
-## Troubleshooting & Lessons Learned
-
-**Common Pitfalls:**
-- Changing horizon or n_action_steps without matching demo structure breaks policy
-- DDPM sampling for evaluation causes action amplification; use DDIM with eta=0.3 for stability and multimodality
-- execute_steps=16 creates out-of-distribution observations; use execute_steps=8
-- Deterministic DDIM (eta=0) disables multimodality testing
-- Gripper temporal ensemble can cause grasp delays; ensemble only position/orientation
-
-**Best Practices:**
-- Always match training and evaluation distributions (e.g., cube_jitter)
-- Use compositional splits for rigorous generalization testing
-- Monitor action std and obs z-score for diagnostics
-
----
-
-## Outputs
-
-| File                        | Description                               |
-|-----------------------------|-------------------------------------------|
-| outputs/metrics.json        | Overall counts, rates, entropy, collapse  |
-| outputs/results.csv         | Per-rollout outcome table                 |
-| outputs/entropy_by_seed.csv | Per-seed entropy + flags                  |
-| outputs/multimodality_bar.png | Bar chart: left/right/fail per env seed |
-| outputs/videos/*.mp4        | Rollout videos (named by outcome)         |
-| outputs/bc/bc_metrics.json  | BC baseline metrics                       |
-
----
-
-## References
-
-- [Compositional Split Strategy](COMPOSITIONAL_SPLIT_STRATEGY.md)
-- [Final Root Cause Analysis](FINAL_ROOT_CAUSE_ANALYSIS.md)
-- [Pipeline Diagnosis](PIPELINE_DIAGNOSIS.md)
-- [Demo Analysis & Recommendations](DEMO_ANALYSIS_AND_RECOMMENDATIONS.md)
-
----
-
-## Reproducibility
-
-- All random seeds are configurable (`seed:` in YAML, `--env_seed_start`)
-- Checkpoints include normalization stats for exact replay
-- Tested on Windows 10/11, Python 3.12, PyBullet DIRECT mode, CPU
+## License
+MIT — see [LICENSE](LICENSE). Companion repo: [gemini-vlm-goal-inference](https://github.com/agottap1-lang/gemini-vlm-goal-inference). Advised by Prof. Nakul Gopalan (LOGOS Robotics Lab, ASU).
